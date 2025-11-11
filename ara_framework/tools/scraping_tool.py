@@ -18,7 +18,7 @@ Features:
 """
 import asyncio
 from typing import Optional, Dict, Any, List
-from crewai.tools import tool
+from langchain_core.tools import tool
 import structlog
 
 from mcp_servers.playwright_mcp import PlaywrightAdapter, ScrapedContent

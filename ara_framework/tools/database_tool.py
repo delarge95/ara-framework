@@ -18,7 +18,7 @@ Features:
 import asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from crewai.tools import tool
+from langchain_core.tools import tool
 import structlog
 
 from mcp_servers.supabase_mcp import SupabaseAdapter, StoredAnalysis

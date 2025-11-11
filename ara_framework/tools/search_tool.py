@@ -17,7 +17,7 @@ Features:
 """
 import asyncio
 from typing import List, Optional, Dict, Any
-from crewai.tools import tool
+from langchain_core.tools import tool
 import structlog
 
 from mcp_servers.semantic_scholar import SemanticScholarAdapter, Paper
