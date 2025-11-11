@@ -1,0 +1,432 @@
+# ARA Framework - Configuración de Modelos IA Recomendada
+# Estabilidad: Noviembre 2025
+# Presupuesto: $10-15/mes
+# Objetivo: 100 análisis/mes con máxima calidad/precio
+
+name: ARA-Framework-Config
+version: 1.0
+budget_monthly_usd: 15
+analysis_target_monthly: 100
+
+# ============================================================================
+# STACK DE MODELOS POR AGENTE (RECOMENDACIÓN BALANCEADA)
+# ============================================================================
+
+agents:
+  NicheAnalyst:
+    description: "Análisis de tendencias y mercado con web scraping"
+    primary_model: "gemini-2.5-pro"
+    fallback_1: "deepseek-v3"
+    fallback_2: "gpt-4o"
+    config:
+      max_tokens_output: 8000
+      temperature: 0.7
+      tools:
+        - jina_reader
+        - web_search
+        - playwright_mcp
+      reasoning_mode: false
+      parallel_requests: 3
+    justification: |
+      Gemini 2.5 Pro: 1M contexto = ideal para docenas de URLs
+      Latencia media aceptable (2-3s), análisis de tendencias no time-critical
+      Gratis en Google AI Studio = 0 costo
+
+  LiteratureResearcher:
+    description: "Síntesis de literatura académica con largo contexto"
+    primary_model: "gemini-2.5-pro"
+    fallback_1: "claude-sonnet-4.5"
+    fallback_2: "deepseek-v3"
+    config:
+      max_tokens_output: 12000
+      temperature: 0.5
+      tools:
+        - semantic_scholar
+        - arxiv_search
+        - note_extraction_mcp
+      context_window_utilization: 85%  # Aprovechar 850K de 1M
+      cache_similar_papers: true
+    justification: |
+      Gemini 2.5 Pro: 1M contexto perfecta para papers múltiples
+      Mejor que Sonnet 4.5 (200K) para investigación extensiva
+      No necesita Sonnet en este rol específico
+
+  FinancialAnalyst:
+    description: "Análisis numérico y proyecciones financieras"
+    primary_model: "gpt-5"
+    fallback_1: "claude-sonnet-4.5"
+    fallback_2: "deepseek-v3"
+    config:
+      max_tokens_output: 4000
+      temperature: 0.3
+      tools:
+        - python_interpreter
+        - finance_data_mcp
+        - excel_analyzer
+      reasoning_mode: true
+      parallel_requests: 1
+    justification: |
+      GPT-5: Best MATH benchmark (88.7% MMLU)
+      Reasoning habilitado = más confiable para cálculos
+      1 crédito Copilot Pro acceptable para este uso (lower frequency)
+      Sonnet 4.5 como fallback si créditos agotados
+
+  StrategyProposer:
+    description: "Escritura estratégica y propuestas persuasivas"
+    primary_model: "claude-haiku-4.5"
+    fallback_1: "gpt-5"
+    fallback_2: "claude-sonnet-4.5"
+    config:
+      max_tokens_output: 10000
+      temperature: 0.8
+      tools:
+        - research_context_loader
+        - citation_formatter
+      extended_thinking: false
+      cache_prompts: true
+    justification: |
+      Haiku 4.5: 0.33x crédito = CLAVE para mantener presupuesto
+      Benchmarks de escritura aceptables (IFBench 72%)
+      Pruebas internas: suficiente para propuestas estratégicas
+      Sonnet si Haiku falla o necesita 200K contexto
+
+  ReportGenerator:
+    description: "Generación de código markdown/LaTeX y estructuración"
+    primary_model: "gpt-4o"
+    fallback_1: "claude-haiku-4.5"
+    fallback_2: "deepseek-v3"
+    config:
+      max_tokens_output: 16000
+      temperature: 0.2
+      tools:
+        - markdown_validator
+        - latex_renderer
+        - file_writer
+      structured_output_mode: true
+      parallel_requests: 2
+    justification: |
+      GPT-4o: GRATIS en Copilot Chat
+      HumanEval 88% = bueno para código estructurado
+      Latencia tolerable (1-1.5s) - report generation no tiempo-real
+      Mantiene presupuesto en $0 para este agente crítico
+
+  OrchestratorAgent:
+    description: "Coordinación y toma de decisiones de routing"
+    primary_model: "gpt-5"
+    fallback_1: "gpt-4o"
+    fallback_2: "haiku-4.5"
+    config:
+      max_tokens_output: 2000
+      temperature: 0.3
+      tools:
+        - agent_state_manager
+        - model_selector
+        - performance_monitor
+      reasoning_mode: false
+      response_time_budget_ms: 1500
+      cache_decisions: true
+    justification: |
+      GPT-5: Mejor razonamiento lógico (GPQA 85.7%)
+      Baja latencia esperada (1.5-2s) vs o1/o3 (3-5s)
+      1 crédito por decision es acceptable
+      Fallback a GPT-4o + Haiku para redundancia
+
+# ============================================================================
+# CONFIGURACIÓN DE INFRAESTRUCTURA Y HERRAMIENTAS
+# ============================================================================
+
+mcp_servers:
+  jina_ai_reader:
+    url: "https://mcp.jina.ai/sse"
+    auth: "Bearer ${JINA_API_KEY}"
+    rate_limit: "100 req/min"
+    cost: "gratis"
+    use_cases: ["web_scraping", "url_to_markdown", "search"]
+
+  github_mcp:
+    endpoint: "local"
+    auth: "token ${GITHUB_TOKEN}"
+    features: ["repo_search", "issue_analysis", "code_review"]
+    cost: "gratis"
+
+  playwright_mcp:
+    endpoint: "local"
+    browser: "chromium"
+    headless: true
+    use_cases: ["interactive_browsing", "javascript_rendering"]
+    cost: "gratis"
+
+  semantic_scholar:
+    endpoint: "local"
+    db: "offline_snapshot"
+    update_frequency: "monthly"
+    cost: "gratis"
+
+# Alternativa: DeepSeek free API como fallback primario
+deepseek_fallback:
+  provider: "openrouter"
+  model: "deepseek-chat"
+  pricing: "gratis"
+  rate_limit: "unlimited"
+  context: "128K tokens"
+
+# ============================================================================
+# ALTERNATIVA: SI PRESUPUESTO ES CRÍTICO ($0/mes)
+# ============================================================================
+
+zero_budget_alternative:
+  description: "Stack 100% gratis para MVP"
+  stack:
+    primary: "Gemini 2.5 Pro (Google AI Studio)"
+    secondary: "DeepSeek V3 (OpenRouter free)"
+    coding: "GPT-4o (Copilot free tier)"
+    local: "MiniMax-M2 (open-source, self-hosted)"
+
+  tradeoff: |
+    - Latencia más variable (depends on rate limits)
+    - Menos control sobre tokens premium
+    - Funciona, pero con hits esporádicos de performance
+    - No recomendado para producción > 100 análisis/mes
+
+  rate_limits_concern: |
+    Gemini 2.5 Pro: ~1000 RPM, ~4M TPM (free tier)
+    DeepSeek: 100 RPM (OpenRouter free)
+    Mapeo: requier round-robin + backoff estratégico
+
+# ============================================================================
+# ALTERNATIVA: PREMIUM FULL ($39+/mes)
+# ============================================================================
+
+premium_full_alternative:
+  description: "Stack máximo: Sonnet para coding, GPT-5 para analysis"
+  cost: "$189-239/mes"
+  stack:
+    - service: "Copilot Pro+ ($39/mes)"
+      features: "1500 premium requests, acceso a todos los modelos premium"
+    - service: "Claude Sonnet 4.5 API ($150-200/mes)"
+      config: "100M input tokens/mes, 20M output tokens/mes"
+      rationale: "77.2% SWE-bench verified = mejor coding del mercado"
+
+  use_when: |
+    - Escala > 500 análisis/mes
+    - Necesitas máxima confiabilidad
+    - ROI de análisis justifica costo
+    - Production-grade system
+
+# ============================================================================
+# DECISIONES CRÍTICAS RESUELTAS
+# ============================================================================
+
+decisions:
+  question_1: "¿Vale la pena pagar 1x crédito por GPT-5-Codex si MiniMax-M2 es gratis?"
+    answer: |
+      NO para > 70% de casos coding
+
+      Razón: MiniMax-M2 logra 69.4% SWE-bench Verified
+             vs GPT-5-Codex ~75%
+
+      Diferencia de 5-6%: costo-beneficio pobre
+
+      EXCEPTO: 
+      - SWE-bench Multilingual (MiniMax 56.5 vs GPT-5-Codex datos limitados)
+      - Terminal-Bench complex (MiniMax 46.3 vs GPT-5-Codex ~45) - tie
+      - Si ya tienes créditos sobrados
+
+      Recomendación: Usa MiniMax-M2 como primary, GPT-5-Codex solo si Haiku falla
+
+  question_2: "¿Claude Haiku 4.5 (0.33x) justifica el costo vs GPT-4o gratis?"
+    answer: |
+      DEPENDE del case:
+
+      CASOS DONDE HAIKU VALE LA PENA (0.33x crédito):
+      ✓ Escritura estratégica (IFBench 72% vs GPT-4o unknown lower)
+      ✓ Análisis de texto largo (Haiku mejor context handling)
+      ✓ Computer use tasks (50.7% vs Sonnet 4 42.2% - exceeds GPT-4o)
+      ✓ Cuando necesitas thread de conversación con memoria
+
+      CASOS DONDE USA GPT-4O GRATIS:
+      ✓ Report generation (ambos similares en code)
+      ✓ Data synthesis (no hay ventaja clara)
+      ✓ Simple classification tasks
+      ✓ Cuando presupuesto es crítico
+
+      Recomendación ARA: 
+      - StrategyProposer: Haiku 4.5 (mejor escritura)
+      - ReportGenerator: GPT-4o (equivalente + gratis)
+      - Resultado neto: ~240 créditos/mes (apenas 80 de 300 Copilot Pro)
+
+  question_3: "¿Claude Sonnet 4.5 es mejor que GPT-5 para escritura?"
+    answer: |
+      NO en benchmarks generales, PERO:
+
+      GPT-5 benchmark scores:
+      - GPQA Diamond: 85.7% (Sonnet 4.5: 83.4%) ← GPT-5 gana
+      - SWE-bench Verified: 72.8% (Sonnet 4.5: 77.2%) ← Sonnet gana AQUÍ
+      - MMLU-Pro: 87% (Sonnet 4.5: 88%) ← Sonnet gana
+
+      Para ESCRITURA ESPECÍFICAMENTE:
+      - MT-Bench: datos completos no publicados
+      - Reportes reales usuarios: Sonnet ligeramente más coherente
+
+      PERO: costo Sonnet ($3/$15) vs GPT-5 ($1.25/$10) = Sonnet 2x más caro
+
+      Recomendación: 
+      - Si necesitas coding = Sonnet 4.5 (77.2% SWE-bench)
+      - Si necesitas análisis = GPT-5 (mejor razonamiento)
+      - Para escribir = GPT-5 (más barato + equivalente o mejor)
+
+  question_4: "¿Gemini 2.5 Pro gratis puede reemplazar modelos premium?"
+    answer: |
+      SÍ en un ~60-70% de casos, PERO:
+
+      Fortalezas Gemini 2.5 Pro:
+      ✓ 1M contexto (vs 128-200K competidores)
+      ✓ Gratis en Google AI Studio
+      ✓ Multimodal (imágenes, video, audio)
+      ✓ HumanEval 90% competitive
+      ✓ Latencia aceptable (2-3s)
+
+      Debilidades:
+      ✗ SWE-bench Verified solo 63.8% (vs Sonnet 77.2%, MiniMax 69.4%)
+      ✗ Terminal-Bench débil 25.3% (vs MiniMax 46.3%)
+      ✗ Rate limits en free tier (1K RPM vs unlimited pagados)
+      ✗ Reasoning mode limitado vs o1/o3/GPT-5
+
+      Casos óptimos Gemini 2.5 Pro:
+      ✓ Long-context research (papers múltiples)
+      ✓ Análisis de tendencias web
+      ✓ Procesamiento de videos (única ventaja real)
+      ✓ Multimodal analysis
+
+      Casos donde necesitas premium:
+      ✗ Coding SWE-level (use Sonnet o MiniMax)
+      ✗ Complex reasoning (use GPT-5, o1/o3)
+      ✗ Terminal automation (use MiniMax)
+
+      Recomendación: Gemini como primary para research/análisis,
+                     complementar con modelos specialty para coding/reasoning
+
+  question_5: "¿Cursor Pro $20 se justifica si tengo Copilot Pro $10?"
+    answer: |
+      NO - Hoy NO hay razón para pagar $20 más
+
+      Cursor Pro ($20):
+      - 500 premium requests/mes solamente
+      - Extras cuestan $0.10 c/u (MÁS CARO que Copilot $0.04)
+      - Mismos modelos que Copilot desde Oct 2024
+      - Única ventaja: mejor AI-powered file navigation (marginal)
+
+      GitHub Copilot Pro ($10):
+      - 300 premium requests/mes (suficiente para MVP)
+      - Unlimited completions
+      - Upgrade a Pro+ ($39) = 1500 requests si needed
+      - Integración perfecta con GitHub
+      - Better agent mode en VSCode
+
+      Recomendación CLARA: 
+      ✓ USA: GitHub Copilot Pro ($10) como base
+      ✓ EVITA: Cursor Pro ($20) = bad ROI
+      ✓ CONSIDERA: Copilot Pro+ ($39) si necesitas 1500+ premium/mes
+                   (eso sería 500+ análisis large)
+
+      Continue.dev ($0) como alternativa: 
+      - Gratis, fully customizable
+      - Pero requiere config manual de APIs
+      - Para developers comfortable con config
+
+  question_6: "¿Qué combinación maximize calidad/precio para 100 análisis/mes?"
+    answer: |
+      RECOMENDACIÓN FINAL - ESCENARIO BALANCEADO:
+
+      Inversión: $15/mes total
+      ├─ GitHub Copilot Pro: $10/mes (300 premium requests)
+      ├─ Gemini 2.5 Pro: $0 (Google AI Studio free)
+      ├─ DeepSeek V3: $0 (OpenRouter free)
+      └─ MiniMax-M2: $0 (self-hosted open-source)
+
+      Stack por agente:
+      1. NicheAnalyst: Gemini 2.5 Pro → DeepSeek V3 → GPT-4o
+      2. LiteratureResearcher: Gemini 2.5 Pro → Claude Haiku → DeepSeek
+      3. FinancialAnalyst: GPT-5 (1 crédito/analysis) → Sonnet → DeepSeek
+      4. StrategyProposer: Claude Haiku (0.33 crédito) → GPT-5 → Sonnet
+      5. ReportGenerator: GPT-4o → Haiku → MiniMax-M2 (local)
+      6. Orchestrator: GPT-5 → GPT-4o → Haiku
+
+      Cálculo mensual:
+      - 100 análisis
+      - ~80 requieren premium models
+      - ~60 usan Haiku/cheap tiers (0.33x crédito) = 20 créditos
+      - ~15 usan GPT-5 (1x crédito) = 15 créditos
+      - ~5 usan o1/o3 (2x crédito) = 10 créditos
+      → Total ~45 créditos/mes (de 300 disponibles)
+      → Sobrantes: 255 créditos para spikes
+
+      Costo: $10 (Copilot) + $0 (gratis) = $10/mes
+
+      SCORE DE ESTA CONFIGURACIÓN:
+      ✓ Costo: 9/10 (sobretodo considerando capacidades)
+      ✓ Flexibility: 8/10 (buena cobertura de casos)
+      ✓ Reliability: 8/10 (múltiples fallbacks)
+      ✓ Performance: 7/10 (latencia variable pero aceptable)
+      ✓ Escalabilidad: 7/10 (funciona hasta ~300 análisis/mes)
+
+# ============================================================================
+# MCP SERVERS SETUP (LOCAL DEPLOYMENT)
+# ============================================================================
+
+mcp_deployment:
+  environment: "Docker container + VSCode MCP"
+  installation: |
+    1. npm install -g @anthropic/mcp-cli
+    2. git clone github.com/jina-ai/MCP
+    3. git clone github.com/modelcontextprotocol/servers
+    4. Configure ~/.continue/config.json with MCP servers
+    5. Restart VSCode + Continue extension
+
+  docker_compose: |
+    version: '3'
+    services:
+      mcp-server:
+        image: node:20-alpine
+        volumes:
+          - ./mcp-servers:/workspace
+        ports:
+          - "3000:3000"
+        environment:
+          - JINA_API_KEY=${JINA_API_KEY}
+          - GITHUB_TOKEN=${GITHUB_TOKEN}
+
+# ============================================================================
+# MONITOREO Y AJUSTES RECOMENDADOS
+# ============================================================================
+
+monitoring:
+  metrics_to_track:
+    - créditos_usados_vs_presupuesto
+    - latencia_promedio_por_modelo
+    - fallback_frequency (cuándo se usan fallbacks)
+    - cost_per_analysis (debe ser < $0.15 promedio)
+    - modelo_accuracy_vs_benchmarks
+
+  alert_thresholds:
+    - Si latencia promedio > 5s: escalar a Pro+
+    - Si fallbacks > 20% del tiempo: rebalancear stack
+    - Si cost_per_analysis > $0.20: usar más free models
+    - Si accuracy < 70% en análisis: review prompts
+
+# ============================================================================
+# ROADMAP FUTURO (Q1 2026)
+# ============================================================================
+
+future_improvements:
+  q1_2026_candidates:
+    - "Claude Opus 4.1 para análisis de máxima complejidad (si costs drop)"
+    - "Llama 3.2 405B self-hosted si hardware available"
+    - "Fine-tuning de MiniMax-M2 en dominio específico"
+    - "Prompting optimization usando Agent Bench insights"
+    - "MCP servers custom para dominio de mercado"
+
+  when_to_upgrade_to_pro_plus:
+    - Cuando analysis volume > 300/mes (necesitarías ~150-200 créditos)
+    - Cuando accuracy requirements > 85% (necesitas modelos premium siempre)
+    - Cuando latency SLA < 2s (necesitas modelos rápidos consistentemente)

@@ -1,0 +1,4 @@
+Escenario,Descripción,Stack de Modelos,Costo Mensual,Disponibilidad Modelos,Recomendación
+Conservador,"80% gratis (Gemini/DeepSeek), 20% Haiku en Copilot",Gemini 2.5 Pro + DeepSeek V3 + Haiku (300 créditos),$0-5 (gratis + créditos sobrantes),Limitada (falta reasoning premium),Para MVP/inicial
+Balanceado,"40% gratis, 40% Haiku 4.5, 20% premium selectivo",Mismo + Copilot Pro ($10),$10-15,Balanceada,RECOMENDADO para ARA v1
+Premium,"Mix óptimo: Sonnet para coding, GPT-5 para análisis, gratis para broker",Copilot Pro+ ($39) + Claude Sonnet API ($150-200),$189-239,Máxima (acceso a todos los premium),Para escala > 500 análisis/mes

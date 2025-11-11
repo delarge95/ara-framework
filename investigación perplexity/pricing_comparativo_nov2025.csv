@@ -1,0 +1,12 @@
+Modelo,Costo Mensual,Créditos/Requests,Costo Extra por Request,Modelos Disponibles
+GitHub Copilot Pro,$10,300 premium/mes,$0.04 c/u,"GPT-4o, Claude Haiku, Gemini"
+GitHub Copilot Pro+,$39,"1,500 premium/mes",$0.04 c/u,"Todo (incl. GPT-5, o3, Claude Opus)"
+Claude Haiku 4.5 (API),Pago por uso,Ilimitado,Incluido,Haiku 4.5 solamente
+Claude Sonnet 4.5 (API),Pago por uso,Ilimitado,Incluido,Sonnet 4.5 solamente
+GPT-5 (API),Pago por uso,Ilimitado,Incluido,"GPT-5, GPT-5-Codex, minimax"
+Gemini 2.5 Pro (gratis),Gratis,Rate limits (RPM/TPM),Incluido,Gemini 2.5 Pro/Flash
+DeepSeek V3 (gratis),Gratis,Rate limits,Incluido,DeepSeek V3
+MiniMax-M2 (gratis),Gratis,Ilimitado,Incluido,MiniMax-M2
+Cursor Pro,$20,500 premium,$0.10 c/u,"Claude Sonnet, GPT-4o"
+Continue.dev (gratis),Gratis,Ilimitado,Incluido,Customizable (40+ providers)
+Cody Sourcegraph (gratis),Gratis,Ilimitado,Incluido,"Claude 3.5, GPT-4o"

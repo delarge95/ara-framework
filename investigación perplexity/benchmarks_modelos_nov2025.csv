@@ -1,0 +1,14 @@
+Modelo,Proveedor,Contexto,Costo ($/1M tokens),HumanEval %,MMLU %,SWE-Bench Verified %,Terminal-Bench %,Latencia (ms),Disponibilidad
+GPT-5,OpenAI,400K,$1.25 / $10,~92,88.7,72.8,43.8,1500-2000,Copilot Pro+/Copilot Chat
+GPT-5-Codex,OpenAI,400K,1 crédito,~94,~90,~75,~45,1800-2200,Copilot Pro+/VSCode
+GPT-5 mini,OpenAI,128K,0 / $1,~85,~87,~70,~40,800-1200,Copilot Pro/Chat
+Claude Sonnet 4.5,Anthropic,200K,$3 / $15,~85,~88,77.2,50,1200-1600,Copilot Pro+/API
+Claude Haiku 4.5,Anthropic,200K,$1 / $5,~80,~82,73.3,~42,600-1000,Copilot Pro/API
+Gemini 2.5 Pro,Google,1M,$1.25 / $5-10,~90,86,63.8,25.3,2000-3000,Google AI Studio (gratis)
+DeepSeek V3,DeepSeek,128K,Gratis,~92,~88,67.8,37.7,1000-1500,OpenRouter (gratis)
+MiniMax-M2,MiniMax,200K+,Gratis,~83,~95*,69.4,46.3,800-1200,API gratis + Open-source
+Qwen 2.5 Coder 32B,Alibaba,128K,Gratis,~87,~86,~72,~38,1000-1500,API gratis
+o1/o3 (reasoning),OpenAI,128K,1-2 créditos,~95,~92,74.9,~48,3000-5000,Copilot Pro+
+GPT-4o,OpenAI,128K,Gratis,~88,~88.7,~68,~40,1200-1600,Copilot Chat (gratis)
+GPT-4.1,OpenAI,128K,0 / $1,~87,~88,~68,~38,1200-1500,Copilot Pro/Chat
+Grok Code Fast 1,xAI,128K,0.25 crédito,~82,~85,~65,~35,400-800,Copilot Pro
