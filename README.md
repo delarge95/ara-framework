@@ -1,11 +1,13 @@
 # 🤖 ARA Framework - Academic Research Automation
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![CrewAI 0.100.0](https://img.shields.io/badge/CrewAI-0.100.0-green.svg)](https://github.com/joaomdmoura/crewAI)
+[![LangGraph 1.0+](https://img.shields.io/badge/LangGraph-1.0+-green.svg)](https://github.com/langchain-ai/langgraph)
 [![Groq LLaMA 3.3-70B](https://img.shields.io/badge/LLM-Groq%20LLaMA%203.3--70B-orange.svg)](https://groq.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Sistema multi-agente inteligente para automatización completa de investigación académica**: desde análisis de nicho hasta generación de documentos técnicos profesionales.
+
+> ⚠️ **MIGRATED TO LANGGRAPH (Nov 2025)**: This framework has been upgraded from CrewAI to LangGraph, the industry-leading production-ready framework used by Uber, LinkedIn, Replit, and Elastic. See [Migration Guide](docs/migration/LANGGRAPH_MIGRATION_STRATEGY.md) for details.
 
 ---
 
@@ -35,11 +37,12 @@
 - **Plan de Implementación**: Roadmap detallado con sprints y estimaciones
 - **Documentación Final**: Generación de reportes técnicos profesionales en Markdown
 
-### 🧠 Sistema Multi-Agente con CrewAI
+### 🧠 Sistema Multi-Agente con LangGraph
 - **5 Agentes Especializados** trabajando en colaboración secuencial
-- **Memoria de Largo Plazo** con ChromaDB para contexto entre agentes
+- **Graph-based Architecture** con control de flujo explícito
+- **Built-in Checkpointing** para pausar y reanudar ejecución
 - **Razonamiento Avanzado** con LLaMA 3.3-70B (70 billones de parámetros)
-- **Monitoreo en Tiempo Real** con detección automática de bloqueos
+- **Production-Ready** con escalabilidad empresarial probada
 
 ### 💰 Integración LLM Flexible y Económica
 - **Groq (100% GRATIS)**: LLaMA 3.3-70B ultra rápido (750+ tokens/seg)
@@ -91,11 +94,12 @@
 ```
 
 **Tech Stack**:
-- **Framework**: CrewAI 0.100.0 (orchestration multi-agente)
-- **LLM**: Groq LLaMA 3.3-70B via LiteLLM
-- **Memory**: ChromaDB (embeddings) + Redis (cache)
-- **Tools**: Playwright MCP, Semantic Scholar, MarkItDown MCP
+- **Framework**: LangGraph 1.0+ (production-ready graph-based orchestration)
+- **LLM**: Groq LLaMA 3.3-70B via LangChain
+- **Memory**: Built-in StateGraph checkpointing + Redis (cache)
+- **Tools**: LangChain tools, Playwright MCP, Semantic Scholar, MarkItDown MCP
 - **Languages**: Python 3.12+
+- **Observability**: Ready for LangSmith integration (optional)
 
 ---
 
@@ -301,52 +305,101 @@ llm_model = "gemini/gemini-2.5-pro"
 
 ## 💡 Uso
 
-### CLI Básico
-
-```bash
-# Test simple (un solo agente)
-python test_simple.py
-
-# Pipeline completo con monitoreo
-python test_monitored_realtime.py
-
-# Pipeline manual (paso a paso)
-python test_pipeline_manual.py
-```
-
-### API Programática
+### API Programática (LangGraph)
 
 ```python
-from core.pipeline import ResearchPipeline
+from graphs import create_research_graph, run_research_pipeline
 
-# Inicializar pipeline
-pipeline = ResearchPipeline(budget_limit=5.0)
-
-# Ejecutar investigación
-result = pipeline.run_analysis_sync(
-    niche="Rust WebAssembly for real-time audio processing"
+# Opción 1: Función de conveniencia (recomendado)
+result = await run_research_pipeline(
+    niche="Rust WebAssembly for real-time audio processing",
+    budget_limit=10.0,
+    enable_checkpointing=True,
 )
 
 # Acceder a resultados
-print(result.status)  # PipelineStatus.COMPLETED
-print(result.final_document)  # Markdown completo
-print(result.total_credits_used)  # 0.0 con Groq
+print(result["final_report"])  # Markdown completo
+print(result["agent_history"])  # Lista de agentes ejecutados
+print(result["total_credits_used"])  # 0.0 con Groq
+print(result["errors"])  # Lista de errores (vacía si exitoso)
+
+# Opción 2: Control manual del grafo
+from datetime import datetime, timezone
+
+graph = create_research_graph(
+    enable_checkpointing=True,
+    checkpoint_backend="memory",  # o "redis" para producción
+)
+
+initial_state = {
+    "niche": "Rust WebAssembly for real-time audio processing",
+    "messages": [],
+    "agent_history": [],
+    "errors": [],
+    "warnings": [],
+    "retry_count": {},
+    "total_credits_used": 0.0,
+    "budget_limit": 10.0,
+    "budget_exceeded": False,
+    "start_time": datetime.now(timezone.utc).isoformat(),
+    "current_agent": "niche_analyst",
+}
+
+# Ejecutar grafo
+result = await graph.ainvoke(initial_state)
+print(result["final_report"])
 ```
 
 ### Personalizar Agentes
 
 ```python
-# agents/custom_agent.py
-from crewai import Agent
+# graphs/custom_graph.py
+from langchain_groq import ChatGroq
+from langchain_core.messages import SystemMessage, HumanMessage
+from langgraph.prebuilt import create_react_agent
+from langgraph.graph import StateGraph, END
 
-custom_agent = Agent(
-    role="Custom Researcher",
-    goal="Tu objetivo específico aquí",
-    backstory="Contexto del agente...",
-    llm="groq/llama-3.3-70b-versatile",
-    tools=[scraping_tool, search_tool],
-    verbose=True
-)
+def custom_researcher_node(state):
+    """Nodo personalizado de investigación."""
+    llm = ChatGroq(model="llama-3.3-70b-versatile")
+    agent = create_react_agent(llm, tools=[custom_tool])
+    
+    result = agent.invoke({
+        "messages": [
+            SystemMessage(content="You are a custom researcher..."),
+            HumanMessage(content=f"Research: {state['topic']}"),
+        ]
+    })
+    
+    return {
+        **state,
+        "research_output": result["messages"][-1].content,
+    }
+
+# Agregar a tu grafo personalizado
+workflow = StateGraph(CustomState)
+workflow.add_node("custom_researcher", custom_researcher_node)
+workflow.add_edge("custom_researcher", END)
+```
+
+### CLI Básico (Deprecated - Legacy)
+
+> ⚠️ Los scripts CLI antiguos basados en CrewAI están deprecados. Use la nueva API de LangGraph.
+
+```bash
+# Nuevo: Ejecutar con Python directamente
+python -c "from graphs import run_research_pipeline; import asyncio; asyncio.run(run_research_pipeline('Your Niche'))"
+
+# O crear un script wrapper:
+# scripts/run_research.py
+import asyncio
+from graphs import run_research_pipeline
+
+result = asyncio.run(run_research_pipeline(
+    niche="Your research niche",
+    budget_limit=10.0,
+))
+print(result["final_report"])
 ```
 
 ---

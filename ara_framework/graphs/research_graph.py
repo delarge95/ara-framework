@@ -100,8 +100,8 @@ class ResearchState(TypedDict):
     budget_limit: float
     budget_exceeded: bool
     
-    # Checkpointing
-    checkpoint_id: Optional[str]
+    # Checkpointing (handled internally by LangGraph)
+    # checkpoint_id is reserved by LangGraph - removed
 
 
 # =============================================================================
@@ -1418,7 +1418,6 @@ async def run_research_pipeline(
         "total_credits_used": 0.0,
         "budget_limit": budget_limit,
         "budget_exceeded": False,
-        "checkpoint_id": None,
     }
     
     # Execute graph
