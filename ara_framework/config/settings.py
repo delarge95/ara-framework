@@ -66,6 +66,52 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None  # Opcional, Copilot Pro lo maneja
     
     # ============================================================
+    # GROQ (LLaMA 3.3-70B - GRATIS - 14,400 req/día)
+    # ============================================================
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.1-8b-instant"  # Modelo más pequeño para evitar rate limit
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_TEMPERATURE: float = 0.7
+    
+    # ============================================================
+    # PERPLEXITY AI (Real-time web search + LLM)
+    # ============================================================
+    PERPLEXITY_API_KEY: Optional[str] = None
+    PERPLEXITY_MODEL: str = "llama-3.1-sonar-large-128k-online"  # Best quality
+    # Available models:
+    # - llama-3.1-sonar-small-128k-online: Fast, cheaper
+    # - llama-3.1-sonar-large-128k-online: Better quality (recommended)
+    # - llama-3.1-sonar-huge-128k-online: Best quality, slower
+    PERPLEXITY_BASE_URL: str = "https://api.perplexity.ai"
+    
+    # ============================================================
+    # GITHUB MODELS (Beta - GRATIS durante beta)
+    # ============================================================
+    GITHUB_TOKEN: Optional[str] = None  # Personal Access Token with read:packages
+    GITHUB_MODEL: str = "gpt-4o"  # Modelo por defecto
+    # Available models (verificados Nov 2025):
+    # OpenAI:
+    # - gpt-4o: Mejor para análisis, arquitectura, síntesis (RECOMENDADO)
+    # - gpt-4o-mini: Más rápido y económico
+    # Meta Llama:
+    # - Llama-3.3-70B-Instruct: Último Llama 3.3 (NUEVO)
+    # - Meta-Llama-3.1-405B-Instruct: Modelo más grande (405B parámetros)
+    # - Meta-Llama-3.1-8B-Instruct: Más rápido
+    # Microsoft Phi:
+    # - Phi-4: Último modelo Phi (NUEVO)
+    # Mistral AI:
+    # - Mistral-Nemo: Balance calidad/velocidad
+    # - Mistral-small: Más rápido
+    # Cohere:
+    # - cohere-command-r-08-2024: Para tareas generales
+    # - cohere-command-r-plus-08-2024: Versión mejorada
+    # AI21 Labs:
+    # - jamba-1.5-large: Modelo híbrido SSM-Transformer
+    # Otras:
+    # - ministral-3b: Modelo pequeño (3B parámetros)
+    GITHUB_MODELS_BASE_URL: str = "https://models.inference.ai.azure.com"
+    
+    # ============================================================
     # MCP SERVERS - Tokens y URLs
     # ============================================================
     # GitHub MCP
@@ -84,6 +130,19 @@ class Settings(BaseSettings):
     
     # Composio/Rube MCP (workflows)
     COMPOSIO_API_KEY: Optional[str] = None
+    
+    # ============================================================
+    # OLLAMA - Local LLM Server (TESTING/DEVELOPMENT)
+    # ============================================================
+    OLLAMA_BASE_URL: str = "http://localhost:11434"  # Ollama API endpoint
+    OLLAMA_MODEL: str = "mistral:7b"  # Modelo por defecto para testing
+    OLLAMA_MODELS_PATH: str = r"E:\modelos_ollama"  # Directorio de modelos
+    OLLAMA_TEMPERATURE: float = 0.7
+    OLLAMA_NUM_CTX: int = 32768  # Context window (32K para Mistral 7B)
+    # Available models (verificar con: ollama list):
+    # - mistral:7b: Tool calling support confirmado (4.4GB)
+    # - qwen2.5:8b: Por verificar tool calling (4.7GB)
+    # Uso recomendado: Development/testing (sin rate limits)
     
     # ============================================================
     # SEMANTIC SCHOLAR API (No requiere key, 1 req/seg limit)

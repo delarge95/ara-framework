@@ -23,7 +23,7 @@ Output: Documento de arquitectura técnica con componentes, diagramas, stack
 Fuente: docs/03_AI_MODELS.md (Agent 3), docs/04_ARCHITECTURE.md (Agents Layer)
 """
 import structlog
-from crewai import Agent, Task
+# from crewai import Agent, Task  # CrewAI removed - using LangGraph only
 from typing import Dict, Any, Optional
 
 from config.settings import settings

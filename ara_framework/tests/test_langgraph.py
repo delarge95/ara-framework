@@ -84,21 +84,21 @@ class TestResearchGraph:
         assert graph is not None
     
     @pytest.mark.asyncio
-    @patch("graphs.research_graph.ChatGroq")
-    @patch("graphs.research_graph.create_react_agent")
-    async def test_niche_analyst_node(self, mock_create_agent, mock_chat_groq):
+    @patch("graphs.research_graph.safe_agent_invoke")
+    @patch("graphs.research_graph.create_model")
+    async def test_niche_analyst_node(self, mock_create_model, mock_safe_invoke):
         """Test the niche analyst node in isolation."""
         from graphs.research_graph import niche_analyst_node
         from langchain_core.messages import AIMessage
         
-        # Mock the agent
-        mock_agent_instance = Mock()
-        mock_agent_instance.invoke = Mock(return_value={
-            "messages": [
-                AIMessage(content="# Niche Analysis\n\nThis is a test analysis.")
-            ]
-        })
-        mock_create_agent.return_value = mock_agent_instance
+        # Mock the model and safe_agent_invoke
+        mock_model = Mock()
+        mock_create_model.return_value = mock_model
+        
+        mock_safe_invoke.return_value = {
+            "output": "# Niche Analysis\n\nThis is a test analysis.",
+            "tool_calls": []
+        }
         
         # Create initial state
         initial_state: ResearchState = {
@@ -122,24 +122,28 @@ class TestResearchGraph:
             
         }
         
-        # Execute node
-        result = niche_analyst_node(initial_state)
+        # Execute node (async)
+        result = await niche_analyst_node(initial_state)
         
         # Verify results
         assert result["niche_analysis"] is not None
-        assert "Test analysis" in result["niche_analysis"]
+        assert "test analysis" in result["niche_analysis"]
         assert "niche_analyst" in result["agent_history"]
         assert result["current_agent"] == "literature_researcher"
     
     @pytest.mark.asyncio
-    @patch("graphs.research_graph.create_react_agent")
-    @patch("graphs.research_graph.ChatGroq")
-    async def test_error_handling_in_node(self, mock_chat_groq, mock_create_agent):
+    @patch("graphs.research_graph.safe_agent_invoke")
+    @patch("graphs.research_graph.create_model")
+    async def test_error_handling_in_node(self, mock_create_model, mock_safe_invoke):
         """Test that nodes handle errors properly."""
         from graphs.research_graph import niche_analyst_node
         
-        # Mock agent to raise an error
-        mock_create_agent.side_effect = Exception("Test error")
+        # Mock model creation to work
+        mock_model = Mock()
+        mock_create_model.return_value = mock_model
+        
+        # Mock safe_agent_invoke to raise an error
+        mock_safe_invoke.side_effect = Exception("Test error")
         
         initial_state: ResearchState = {
             "niche": "Test",
@@ -163,7 +167,7 @@ class TestResearchGraph:
         }
         
         # Execute node (should handle error gracefully)
-        result = niche_analyst_node(initial_state)
+        result = await niche_analyst_node(initial_state)
         
         # Verify error handling
         assert len(result["errors"]) > 0

@@ -1,6 +1,6 @@
 # ARA Framework - Core Dependencies
 # Generated from setup.py - Install with: pip install -r requirements.txt
-# Python version required: >=3.11 (recommended: 3.12.x)
+# Python version required: >=3.12
 
 # === LangGraph Multi-Agent Framework ===
 # Production-ready framework used by Uber, LinkedIn, Replit, Elastic (2025)
@@ -9,6 +9,7 @@ langchain>=0.3.0
 langchain-core>=0.3.0
 langchain-community>=0.3.0
 langchain-groq>=0.2.0
+langchain-ollama>=0.2.0
 
 # === Optional LangChain Ecosystem ===
 # langsmith>=0.1.0  # Observability and tracing (optional)

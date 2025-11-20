@@ -65,7 +65,7 @@ class DatabaseTool:
     # ANALYSES
     # ============================================================
     
-    @tool("Save Analysis")
+    @tool("save_analysis")
     async def save_analysis(
         niche_name: str,
         status: str,
@@ -125,7 +125,7 @@ class DatabaseTool:
             )
             return ""
     
-    @tool("Get Previous Analysis")
+    @tool("get_previous_analysis")
     async def get_previous_analysis(niche_name: str) -> Optional[Dict[str, Any]]:
         """
         Busca análisis previo por nombre de niche.
@@ -174,7 +174,7 @@ class DatabaseTool:
             )
             return None
     
-    @tool("List Recent Analyses")
+    @tool("list_recent_analyses")
     async def list_recent_analyses(
         limit: int = 10,
         offset: int = 0,
@@ -222,7 +222,7 @@ class DatabaseTool:
     # PAPERS
     # ============================================================
     
-    @tool("Save Paper")
+    @tool("save_paper")
     async def save_paper(
         paper_id: str,
         title: str,
@@ -291,7 +291,7 @@ class DatabaseTool:
             )
             return ""
     
-    @tool("Query Papers")
+    @tool("query_papers")
     async def query_papers(
         query: str,
         limit: int = 10,
@@ -339,7 +339,7 @@ class DatabaseTool:
             )
             return []
     
-    @tool("Get Paper by ID")
+    @tool("get_paper_by_id")
     async def get_paper_by_id(paper_id: str) -> Optional[Dict[str, Any]]:
         """
         Obtiene paper por ID desde la base de datos.
@@ -387,7 +387,7 @@ class DatabaseTool:
     # STORAGE (Files)
     # ============================================================
     
-    @tool("Upload File")
+    @tool("upload_file")
     async def upload_file(
         bucket: str,
         file_path: str,
@@ -439,7 +439,7 @@ class DatabaseTool:
             )
             return ""
     
-    @tool("Download File")
+    @tool("download_file")
     async def download_file(
         bucket: str,
         file_path: str,
@@ -494,7 +494,7 @@ class DatabaseTool:
     # USAGE LOGS (for BudgetManager)
     # ============================================================
     
-    @tool("Log Model Usage")
+    @tool("log_model_usage")
     async def log_model_usage(
         model: str,
         credits: float,
@@ -550,7 +550,7 @@ class DatabaseTool:
             )
             return ""
     
-    @tool("Get Usage Statistics")
+    @tool("get_usage_statistics")
     async def get_usage_statistics(
         days_back: int = 30,
     ) -> Dict[str, Any]:
@@ -648,3 +648,70 @@ def get_database_tool(redis_client=None) -> DatabaseTool:
         DatabaseTool instance
     """
     return _get_database_tool_instance(redis_client)
+
+
+# ============================================================
+# Module-level tool functions (LangChain @tool decorated)
+# ============================================================
+
+@tool("save_analysis")
+async def save_analysis(
+    niche_name: str,
+    status: str,
+    report_markdown: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> str:
+    """
+    Guarda o actualiza un análisis en la base de datos.
+    
+    Args:
+        niche_name (str): Nombre del niche analizado
+        status (str): Estado del análisis ("pending", "processing", "completed", "failed")
+        report_markdown (str, optional): Reporte completo en Markdown
+        metadata (dict, optional): Metadata adicional (papers usados, tiempos, etc.)
+    
+    Returns:
+        str: ID del análisis guardado
+    
+    Example:
+        analysis_id = save_analysis(
+            niche_name="AI in healthcare",
+            status="completed",
+            report_markdown="# Analysis Report\\n\\n...",
+            metadata={
+                "papers_analyzed": 50,
+                "execution_time": 3600,
+                "credits_used": 15.5,
+            }
+        )
+    """
+    from datetime import datetime
+    
+    tool_instance = _get_database_tool_instance()
+    await tool_instance._ensure_connected()
+    
+    try:
+        analysis_id = await tool_instance.adapter.save_analysis({
+            "niche_name": niche_name,
+            "status": status,
+            "report_markdown": report_markdown,
+            "metadata": metadata or {},
+            "created_at": datetime.now().isoformat(),
+        })
+        
+        logger.info(
+            "analysis_saved",
+            analysis_id=analysis_id,
+            niche_name=niche_name,
+            status=status,
+        )
+        
+        return analysis_id
+    
+    except Exception as e:
+        logger.error(
+            "save_analysis_failed",
+            niche_name=niche_name,
+            error=str(e),
+        )
+        return ""

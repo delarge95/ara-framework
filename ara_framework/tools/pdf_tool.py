@@ -51,7 +51,7 @@ class PDFTool:
             await self.adapter.connect()
             self._connected = True
     
-    @tool("Convert PDF to Markdown")
+    @tool("convert_pdf_to_markdown")
     async def convert_pdf_to_markdown(
         file_path: str,
         clean_headers: bool = True,
@@ -133,7 +133,7 @@ class PDFTool:
                 "method_used": "none",
             }
     
-    @tool("Extract PDF Sections")
+    @tool("extract_pdf_sections")
     async def extract_pdf_sections(file_path: str) -> Dict[str, str]:
         """
         Extrae secciones académicas de un PDF.
@@ -182,7 +182,7 @@ class PDFTool:
             )
             return {}
     
-    @tool("Extract PDF Text Only")
+    @tool("extract_pdf_text_only")
     async def extract_pdf_text_only(file_path: str) -> str:
         """
         Extrae solo texto plano de un PDF (sin markdown formatting).
@@ -224,7 +224,7 @@ class PDFTool:
             )
             return ""
     
-    @tool("Convert Multiple PDFs")
+    @tool("convert_multiple_pdfs")
     async def convert_multiple_pdfs(
         file_paths: List[str],
         max_concurrent: int = 2,
@@ -280,7 +280,7 @@ class PDFTool:
             )
             return []
     
-    @tool("Get PDF Metadata")
+    @tool("get_pdf_metadata")
     async def get_pdf_metadata(file_path: str) -> Dict[str, Any]:
         """
         Extrae solo metadatos de un PDF (sin convertir contenido).
@@ -370,3 +370,50 @@ def get_pdf_tool(redis_client=None) -> PDFTool:
         PDFTool instance
     """
     return _get_pdf_tool_instance(redis_client)
+
+
+# ============================================================
+# Module-level tool functions (LangChain @tool decorated)
+# ============================================================
+
+@tool("extract_pdf_text_only")
+async def extract_pdf_text_only(file_path: str) -> str:
+    """
+    Extrae solo texto plano de un PDF (sin markdown formatting).
+    
+    Útil para búsquedas o análisis de texto donde el formato no importa.
+    
+    Args:
+        file_path (str): Path al archivo PDF
+    
+    Returns:
+        str: Texto plano extraído
+    
+    Example:
+        text = extract_pdf_text_only("paper.pdf")
+        
+        # Buscar keyword
+        if "deep learning" in text.lower():
+            print("Paper mentions deep learning")
+    """
+    tool_instance = _get_pdf_tool_instance()
+    await tool_instance._ensure_connected()
+    
+    try:
+        text = await tool_instance.adapter.extract_text_only(file_path)
+        
+        logger.info(
+            "pdf_text_extracted",
+            file_path=file_path,
+            text_length=len(text),
+        )
+        
+        return text
+    
+    except Exception as e:
+        logger.error(
+            "pdf_text_extraction_failed",
+            file_path=file_path,
+            error=str(e),
+        )
+        return ""

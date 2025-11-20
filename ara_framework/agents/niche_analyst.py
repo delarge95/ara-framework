@@ -29,7 +29,7 @@ Output: Reporte Markdown con:
 Fuente: docs/03_AI_MODELS.md (Agent 1), docs/04_ARCHITECTURE.md (Agents Layer)
 """
 import structlog
-from crewai import Agent, Task
+# from crewai import Agent, Task  # CrewAI removed - using LangGraph only
 from typing import Dict, Any
 
 from config.settings import settings
@@ -275,7 +275,7 @@ def create_niche_analyst(niche: str) -> tuple[Agent, Task]:
     Example:
         >>> agent, task = create_niche_analyst("Rust + WebAssembly")
         >>> crew = Crew(agents=[agent], tasks=[task])
-        >>> result = crew.kickoff()
+        >>> result = graph.invoke()
     """
     agent = create_niche_analyst_agent()
     task = create_niche_analysis_task(agent, niche)

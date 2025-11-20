@@ -37,23 +37,40 @@ from operator import add
 
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.tools import tool
 
 from langgraph.graph import StateGraph, END, START
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
 
 from config.settings import settings
 from core.budget_manager import BudgetManager
-from tools import (
-    get_scraping_tool,
-    get_search_tool,
-    get_pdf_tool,
-    get_database_tool,
-)
+from core.agent_utils import safe_agent_invoke
+from core.model_factory import create_model
+
+# Import module-level tool functions directly
+from tools.scraping_tool import scrape_website, scrape_multiple_urls
+from tools.search_tool import search_recent_papers
+from tools.pdf_tool import extract_pdf_text_only
+from tools.database_tool import save_analysis
 
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# LLM Provider Configuration
+# =============================================================================
+
+# Control which LLM provider to use for agents
+# Options: "github" (gpt-4o, 50 req/day limit) or "ollama" (mistral:7b, unlimited)
+# Can be overridden via environment variable: USE_OLLAMA=true
+import os
+USE_OLLAMA = os.getenv("USE_OLLAMA", "false").lower() == "true"
+LLM_PROVIDER = "ollama" if USE_OLLAMA else "github"
+
+logger.info("llm_provider_selected", provider=LLM_PROVIDER, 
+            model="mistral:7b" if USE_OLLAMA else "gpt-4o")
 
 
 # =============================================================================
@@ -108,7 +125,7 @@ class ResearchState(TypedDict):
 # Agent Node Functions
 # =============================================================================
 
-def niche_analyst_node(state: ResearchState) -> ResearchState:
+async def niche_analyst_node(state: ResearchState) -> ResearchState:
     """
     Node 1: Niche Analysis Agent.
     
@@ -133,25 +150,22 @@ def niche_analyst_node(state: ResearchState) -> ResearchState:
     )
     
     try:
-        # Initialize LLM
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+        # Initialize LLM - Supports both GitHub Models and Ollama
+        # GitHub Models: gpt-4o (128K context, 50 req/day limit)
+        # Ollama: mistral:7b (32K context, unlimited local inference)
+        # Toggle via environment variable: USE_OLLAMA=true
+        llm = create_model(
+            provider=LLM_PROVIDER,
+            model="mistral:7b" if USE_OLLAMA else settings.GITHUB_MODEL,
             temperature=0.7,
-            api_key=settings.GROQ_API_KEY,
         )
         
-        # Get tools
-        scraping = get_scraping_tool()
-        search = get_search_tool()
-        
+        # Use module-level tool functions directly (no need for instances)
         tools = [
-            scraping.scrape_website,
-            scraping.scrape_multiple_urls,
-            search.search_recent_papers,
+            scrape_website,
+            scrape_multiple_urls,
+            search_recent_papers,
         ]
-        
-        # Create ReAct agent
-        agent = create_react_agent(llm, tools)
         
         # System prompt
         system_msg = SystemMessage(content=f"""You are a Niche Market Analyst with 10+ years of experience identifying opportunities in emerging technology niches.
@@ -221,24 +235,34 @@ Your mission: Analyze the viability and opportunities of the niche "{state['nich
 - Focus on EMERGING trends, not mature technologies
 - Use tools to gather real data, don't make assumptions
 - Rate limit: Semantic Scholar is 1 req/sec, be careful
+
+**WEB SCRAPING TIPS (Updated Nov 2025):**
+- ⚠️ GitHub/Reddit/HackerNews have anti-bot protection - timeouts are common
+- If scraping fails, DON'T retry same URL - move forward with available data
+- Focus on academic papers (Semantic Scholar) which are more reliable
+- Alternative: Use search_recent_papers() to infer community activity from paper topics
+- Don't depend on web scraping for your analysis - papers are enough
 """)
         
         # Human input
         human_msg = HumanMessage(content=f"Analyze the niche: {state['niche']}")
         
-        # Invoke agent
-        result = agent.invoke({
-            "messages": [system_msg, human_msg]
-        })
+        # Invoke agent with safe wrapper (async)
+        result = await safe_agent_invoke(
+            llm=llm,
+            tools=tools,
+            messages=[system_msg, human_msg],
+            max_iterations=5,
+        )
         
-        # Extract analysis from last AI message
-        analysis = result["messages"][-1].content
+        # Extract analysis
+        analysis = result["output"]
         
         # Update state
         logger.info(
             "niche_analyst_completed",
             output_length=len(analysis),
-            tool_calls=len([m for m in result["messages"] if hasattr(m, "tool_calls") and m.tool_calls]),
+            tool_calls=len(result.get("tool_calls", [])),
         )
         
         return {
@@ -246,7 +270,7 @@ Your mission: Analyze the viability and opportunities of the niche "{state['nich
             "niche_analysis": analysis,
             "current_agent": "literature_researcher",
             "agent_history": state.get("agent_history", []) + ["niche_analyst"],
-            "messages": state.get("messages", []) + result["messages"],
+            "messages": state.get("messages", []) + [system_msg, human_msg],
         }
         
     except Exception as e:
@@ -270,7 +294,7 @@ Your mission: Analyze the viability and opportunities of the niche "{state['nich
         }
 
 
-def literature_researcher_node(state: ResearchState) -> ResearchState:
+async def literature_researcher_node(state: ResearchState) -> ResearchState:
     """
     Node 2: Literature Research Agent.
     
@@ -296,26 +320,22 @@ def literature_researcher_node(state: ResearchState) -> ResearchState:
     )
     
     try:
-        # Initialize LLM
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+        # Initialize LLM - Supports both GitHub Models and Ollama
+        # GitHub Models: gpt-4o (128K context, 50 req/day limit)
+        # Ollama: mistral:7b (32K context, unlimited local inference)
+        # Note: Agent 2 processes 40 papers (~63K tokens) - may exceed Mistral's 32K
+        llm = create_model(
+            provider=LLM_PROVIDER,
+            model="mistral:7b" if USE_OLLAMA else settings.GITHUB_MODEL,
             temperature=0.7,
-            api_key=settings.GROQ_API_KEY,
         )
         
-        # Get tools
-        search = get_search_tool()
-        pdf = get_pdf_tool()
-        database = get_database_tool()
-        
+        # Use module-level tool functions directly (no need for instances)
         tools = [
-            search.search_recent_papers,
-            pdf.extract_pdf_content,
-            database.save_data,
+            search_recent_papers,
+            extract_pdf_text_only,
+            save_analysis,
         ]
-        
-        # Create ReAct agent
-        agent = create_react_agent(llm, tools)
         
         # System prompt with context from previous agent
         niche_analysis = state.get("niche_analysis", "No analysis available")
@@ -329,13 +349,15 @@ Your mission: Conduct an exhaustive literature review for "{state['niche']}"
 
 **Research Process:**
 
-1. **Broad Search** (100-200 papers):
+1. **Focused Search** (MAX 15-20 papers):
    - Use keywords from niche analysis
-   - Search last 3-5 years (focus on recent)
-   - Filter by relevance and citation count
-   - Cover multiple databases (Semantic Scholar, arXiv)
+   - Search last 2 years (focus on HIGHLY CITED only >50 citations)
+   - CRITICAL: GitHub Models limits REQUEST BODY to 8K tokens
+   - 20 papers ≈ 33K tokens → too large
+   - MAXIMUM 15 papers per search to stay under 25K tokens
+   - Quality over quantity: select best papers only
 
-2. **Deep Analysis** (Top 20 papers):
+2. **Deep Analysis** (Top 10-12 papers):
    - Read abstracts and key sections
    - Extract methodologies, datasets, results
    - Note limitations and future work
@@ -348,8 +370,8 @@ Your mission: Conduct an exhaustive literature review for "{state['niche']}"
    - Recommend specific papers for deeper study
 
 4. **Output**:
-   - Comprehensive literature review (3000-5000 words)
-   - Annotated bibliography of top 20 papers
+   - Focused literature review (2000-3000 words)
+   - Annotated bibliography of top 10-12 papers
    - Research gap analysis
    - Recommendations for technical architecture
 
@@ -381,7 +403,7 @@ Your mission: Conduct an exhaustive literature review for "{state['niche']}"
 ## Research Gaps & Opportunities
 [What hasn't been explored? Where are the opportunities?]
 
-## Top 20 Papers (Annotated Bibliography)
+## Top 10-12 Papers (Annotated Bibliography)
 1. **[Paper Title]** - Author et al. (Year)
    - **Citation Count**: X
    - **Key Contribution**: [Summary]
@@ -389,7 +411,7 @@ Your mission: Conduct an exhaustive literature review for "{state['niche']}"
    - **Relevance**: [Why important]
    - **URL**: [Link]
 
-[... continue for all 20 papers]
+[... continue for top 10-12 papers]
 
 ## Recommendations
 [What should the technical architecture focus on based on this review?]
@@ -397,25 +419,30 @@ Your mission: Conduct an exhaustive literature review for "{state['niche']}"
 
 **CRITICAL:**
 - Semantic Scholar has 1 req/sec limit - pace yourself
-- Focus on HIGH QUALITY papers (citation count, venue)
+- **MAX 40 papers per search** to avoid token limit (8K) errors
+- Focus on HIGH QUALITY papers (citation count >10, top venues)
+- Use limit=40 or less in search_recent_papers calls
+- Pagination automatically handles chunks of 20 papers
 - Be comprehensive but concise
-- Save important papers to database for future reference
 """)
         
         human_msg = HumanMessage(content=f"Conduct comprehensive literature review for: {state['niche']}")
         
-        # Invoke agent
-        result = agent.invoke({
-            "messages": [system_msg, human_msg]
-        })
+        # Invoke agent with safe wrapper
+        result = await safe_agent_invoke(
+            llm=llm,
+            tools=tools,
+            messages=[system_msg, human_msg],
+            max_iterations=5,
+        )
         
         # Extract review
-        review = result["messages"][-1].content
+        review = result["output"]
         
         logger.info(
             "literature_researcher_completed",
             output_length=len(review),
-            tool_calls=len([m for m in result["messages"] if hasattr(m, "tool_calls") and m.tool_calls]),
+            tool_calls=len(result.get("tool_calls", [])),
         )
         
         return {
@@ -423,7 +450,7 @@ Your mission: Conduct an exhaustive literature review for "{state['niche']}"
             "literature_review": review,
             "current_agent": "technical_architect",
             "agent_history": state.get("agent_history", []) + ["literature_researcher"],
-            "messages": state.get("messages", []) + result["messages"],
+            "messages": state.get("messages", []) + [system_msg, human_msg],
         }
         
     except Exception as e:
@@ -446,7 +473,7 @@ Your mission: Conduct an exhaustive literature review for "{state['niche']}"
         }
 
 
-def technical_architect_node(state: ResearchState) -> ResearchState:
+async def technical_architect_node(state: ResearchState) -> ResearchState:
     """
     Node 3: Technical Architecture Agent.
     
@@ -472,26 +499,21 @@ def technical_architect_node(state: ResearchState) -> ResearchState:
     )
     
     try:
-        # Initialize LLM
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+        # Initialize LLM - Supports both GitHub Models and Ollama
+        # GitHub Models: gpt-4o (reliable, supports tools)
+        # Ollama: mistral:7b (32K context, unlimited local inference)
+        llm = create_model(
+            provider=LLM_PROVIDER,
+            model="mistral:7b" if USE_OLLAMA else settings.GITHUB_MODEL,
             temperature=0.7,
-            api_key=settings.GROQ_API_KEY,
         )
         
-        # Get tools
-        scraping = get_scraping_tool()
-        pdf = get_pdf_tool()
-        database = get_database_tool()
-        
+        # Use module-level tool functions directly (no need for instances)
         tools = [
-            scraping.scrape_website,
-            pdf.extract_pdf_content,
-            database.save_data,
+            scrape_website,
+            extract_pdf_text_only,
+            save_analysis,
         ]
-        
-        # Create ReAct agent
-        agent = create_react_agent(llm, tools)
         
         # Get context
         niche_analysis = state.get("niche_analysis", "")[:1500]
@@ -642,18 +664,21 @@ Your mission: Design a comprehensive technical architecture for "{state['niche']
         
         human_msg = HumanMessage(content=f"Design technical architecture for: {state['niche']}")
         
-        # Invoke agent
-        result = agent.invoke({
-            "messages": [system_msg, human_msg]
-        })
+        # Invoke agent with safe wrapper
+        result = await safe_agent_invoke(
+            llm=llm,
+            tools=tools,
+            messages=[system_msg, human_msg],
+            max_iterations=5,
+        )
         
         # Extract architecture
-        architecture = result["messages"][-1].content
+        architecture = result["output"]
         
         logger.info(
             "technical_architect_completed",
             output_length=len(architecture),
-            tool_calls=len([m for m in result["messages"] if hasattr(m, "tool_calls") and m.tool_calls]),
+            tool_calls=len(result.get("tool_calls", [])),
         )
         
         return {
@@ -661,7 +686,7 @@ Your mission: Design a comprehensive technical architecture for "{state['niche']
             "technical_architecture": architecture,
             "current_agent": "implementation_specialist",
             "agent_history": state.get("agent_history", []) + ["technical_architect"],
-            "messages": state.get("messages", []) + result["messages"],
+            "messages": state.get("messages", []) + [system_msg, human_msg],
         }
         
     except Exception as e:
@@ -684,7 +709,7 @@ Your mission: Design a comprehensive technical architecture for "{state['niche']
         }
 
 
-def implementation_specialist_node(state: ResearchState) -> ResearchState:
+async def implementation_specialist_node(state: ResearchState) -> ResearchState:
     """
     Node 4: Implementation Planning Agent.
     
@@ -710,24 +735,20 @@ def implementation_specialist_node(state: ResearchState) -> ResearchState:
     )
     
     try:
-        # Initialize LLM
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+        # Initialize LLM - Supports both GitHub Models and Ollama
+        # GitHub Models: gpt-4o (reliable, supports all tools)
+        # Ollama: mistral:7b (32K context, unlimited local inference)
+        llm = create_model(
+            provider=LLM_PROVIDER,
+            model="mistral:7b" if USE_OLLAMA else settings.GITHUB_MODEL,
             temperature=0.7,
-            api_key=settings.GROQ_API_KEY,
         )
         
-        # Get tools
-        scraping = get_scraping_tool()
-        database = get_database_tool()
-        
+        # Use module-level tool functions directly (no need for instances)
         tools = [
-            scraping.scrape_website,
-            database.save_data,
+            scrape_website,
+            save_analysis,
         ]
-        
-        # Create ReAct agent
-        agent = create_react_agent(llm, tools)
         
         # Get context
         architecture = state.get("technical_architecture", "")[:3000]
@@ -857,18 +878,21 @@ Week  | Phase              | Deliverables
         
         human_msg = HumanMessage(content=f"Create implementation plan for: {state['niche']}")
         
-        # Invoke agent
-        result = agent.invoke({
-            "messages": [system_msg, human_msg]
-        })
+        # Invoke agent with safe wrapper
+        result = await safe_agent_invoke(
+            llm=llm,
+            tools=tools,
+            messages=[system_msg, human_msg],
+            max_iterations=5,
+        )
         
         # Extract plan
-        plan = result["messages"][-1].content
+        plan = result["output"]
         
         logger.info(
             "implementation_specialist_completed",
             output_length=len(plan),
-            tool_calls=len([m for m in result["messages"] if hasattr(m, "tool_calls") and m.tool_calls]),
+            tool_calls=len(result.get("tool_calls", [])),
         )
         
         return {
@@ -876,7 +900,7 @@ Week  | Phase              | Deliverables
             "implementation_plan": plan,
             "current_agent": "content_synthesizer",
             "agent_history": state.get("agent_history", []) + ["implementation_specialist"],
-            "messages": state.get("messages", []) + result["messages"],
+            "messages": state.get("messages", []) + [system_msg, human_msg],
         }
         
     except Exception as e:
@@ -899,7 +923,7 @@ Week  | Phase              | Deliverables
         }
 
 
-def content_synthesizer_node(state: ResearchState) -> ResearchState:
+async def content_synthesizer_node(state: ResearchState) -> ResearchState:
     """
     Node 5: Content Synthesis Agent.
     
@@ -930,19 +954,17 @@ def content_synthesizer_node(state: ResearchState) -> ResearchState:
     )
     
     try:
-        # Initialize LLM
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+        # Initialize LLM - Supports both GitHub Models and Ollama
+        # GitHub Models: gpt-4o (best for synthesis and writing)
+        # Ollama: mistral:7b (32K context, unlimited local inference)
+        llm = create_model(
+            provider=LLM_PROVIDER,
+            model="mistral:7b" if USE_OLLAMA else settings.GITHUB_MODEL,
             temperature=0.7,
-            api_key=settings.GROQ_API_KEY,
         )
         
-        # Get tools
-        database = get_database_tool()
-        tools = [database.save_data]
-        
-        # Create ReAct agent
-        agent = create_react_agent(llm, tools)
+        # Use module-level tool functions directly (no need for instances)
+        tools = [save_analysis]
         
         # Get all context
         niche_analysis = state.get("niche_analysis", "Not available")
@@ -1143,13 +1165,16 @@ Your mission: Create a comprehensive final report for "{state['niche']}" that in
         
         human_msg = HumanMessage(content=f"Synthesize final report for: {state['niche']}")
         
-        # Invoke agent
-        result = agent.invoke({
-            "messages": [system_msg, human_msg]
-        })
+        # Invoke agent with safe wrapper
+        result = await safe_agent_invoke(
+            llm=llm,
+            tools=tools,
+            messages=[system_msg, human_msg],
+            max_iterations=5,
+        )
         
         # Extract final report
-        final_report = result["messages"][-1].content
+        final_report = result["output"]
         
         # Mark end time
         end_time = datetime.now(timezone.utc).isoformat()
@@ -1157,7 +1182,7 @@ Your mission: Create a comprehensive final report for "{state['niche']}" that in
         logger.info(
             "content_synthesizer_completed",
             output_length=len(final_report),
-            tool_calls=len([m for m in result["messages"] if hasattr(m, "tool_calls") and m.tool_calls]),
+            tool_calls=len(result.get("tool_calls", [])),
             total_agents=len(state.get("agent_history", [])) + 1,
         )
         
@@ -1166,7 +1191,7 @@ Your mission: Create a comprehensive final report for "{state['niche']}" that in
             "final_report": final_report,
             "current_agent": "completed",
             "agent_history": state.get("agent_history", []) + ["content_synthesizer"],
-            "messages": state.get("messages", []) + result["messages"],
+            "messages": state.get("messages", []) + [system_msg, human_msg],
             "end_time": end_time,
         }
         
@@ -1422,7 +1447,15 @@ async def run_research_pipeline(
     
     # Execute graph
     try:
-        result = await graph.ainvoke(initial_state)
+        # Add thread_id config if checkpointing is enabled
+        config = {}
+        if enable_checkpointing:
+            # Generate unique thread_id for this pipeline run
+            thread_id = f"pipeline-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            config = {"configurable": {"thread_id": thread_id}}
+            logger.info("checkpointing_config_set", thread_id=thread_id)
+        
+        result = await graph.ainvoke(initial_state, config)
         
         logger.info(
             "research_pipeline_completed",

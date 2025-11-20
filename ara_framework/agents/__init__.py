@@ -62,18 +62,18 @@ Usage:
     synth_agent, synth_task = create_content_synthesizer(niche, [niche_task, lit_task, arch_task, impl_task])
     
     # Crear crew
-    from crewai import Crew, Process
+    # CrewAI removed - using LangGraph only
     
     crew = Crew(
         agents=[niche_agent, lit_agent, arch_agent, impl_agent, synth_agent],
         tasks=[niche_task, lit_task, arch_task, impl_task, synth_task],
-        process=Process.sequential,
+        # StateGraph sequential execution
         verbose=True,
         memory=True,
     )
     
     # Ejecutar
-    result = await crew.kickoff_async(inputs={"niche": niche})
+    result = await graph.ainvoke({"niche": niche})
     ```
 
 Fuente: docs/04_ARCHITECTURE.md (Agents Layer), docs/03_AI_MODELS.md

@@ -1,0 +1,86 @@
+# ============================================================
+# CORE FRAMEWORK - CrewAI + FastAPI (Nov 2025 Validated Stack)
+# ============================================================
+# NOTA: Python 3.12+ compatible con CrewAI 1.x
+crewai>=1.3.0,<1.4  # Multi-agent framework con roles + processes (API moderna con CrewOutput, tool decorator)
+fastapi>=0.109.0  # Web framework (15-20K RPS)
+uvicorn[standard]>=0.27.0  # ASGI server
+pydantic>=2.5.0  # Data validation
+pydantic-settings>=2.1.0  # Settings management
+
+# ============================================================
+# AI MODELS - GitHub Copilot Pro + Free APIs
+# ============================================================
+openai>=1.10.0  # GPT-5, GPT-4o (via Copilot Pro)
+anthropic>=0.18.0  # Claude Sonnet 4.5, Haiku 4.5
+google-generativeai>=0.3.0  # Gemini 2.5 Pro (1500 req/día gratis)
+# DeepSeek V3 - Compatible con OpenAI SDK (usar openai.OpenAI con base_url)
+# MiniMax-M2 - Compatible con OpenAI SDK (usar openai.OpenAI con base_url)
+
+# ============================================================
+# MCP CLIENTS - Model Context Protocol Integration
+# ============================================================
+mcp>=0.9.0  # MCP Python SDK
+playwright>=1.42.0  # Browser automation (MCP server)
+httpx>=0.26.0  # Async HTTP client
+aiofiles>=23.2.1  # Async file operations
+
+# ============================================================
+# DATA INGESTION - Papers, PDFs, Web Scraping
+# ============================================================
+semanticscholar>=0.8.0  # Semantic Scholar API (1 req/seg)
+arxiv>=2.1.0  # arXiv API
+unstructured[pdf]>=0.12.0  # PDF processing (hybrid strategy)
+pymupdf>=1.23.0  # PyMuPDF (fast extraction)
+markitdown>=0.0.1  # Microsoft MarkItDown (MCP server)
+beautifulsoup4>=4.12.0  # HTML parsing
+lxml>=5.0.0  # XML/HTML parser
+
+# ============================================================
+# CACHING & STORAGE - Valkey/Redis + Supabase
+# ============================================================
+redis>=5.0.0  # Valkey client (Redis fork)
+hiredis>=2.3.0  # Fast Redis parser
+supabase>=2.3.0  # PostgreSQL + Storage (500MB gratis)
+
+# ============================================================
+# OBSERVABILITY - OpenTelemetry + Uptrace
+# ============================================================
+opentelemetry-api>=1.22.0
+opentelemetry-sdk>=1.22.0
+
+# ============================================================
+# CLI & TESTING
+# ============================================================
+typer>=0.9.0  # CLI framework
+rich>=13.7.0  # Rich terminal output
+pytest>=7.4.0  # Testing framework
+pytest-asyncio>=0.23.0  # Async test support
+pytest-cov>=4.1.0  # Coverage plugin
+pytest-mock>=3.12.0  # Mocking utilities
+pybreaker>=1.0.0  # Circuit breaker (opcional)
+opentelemetry-instrumentation-fastapi>=0.43b0
+uptrace>=1.22.0  # Backend (1TB traces/mes gratis)
+
+# ============================================================
+# RESILIENCE - Circuit Breaker, Retry, Rate Limiting
+# ============================================================
+pybreaker>=1.0.0  # Circuit breaker pattern
+tenacity>=8.2.0  # Retry with exponential backoff
+aiolimiter>=1.1.0  # Async rate limiter
+
+# ============================================================
+# CLI & LOGGING
+# ============================================================
+typer>=0.9.0  # CLI framework
+rich>=13.7.0  # Pretty terminal output
+structlog>=24.1.0  # Structured logging
+python-dotenv>=1.0.0  # .env file support
+
+# ============================================================
+# UTILITIES
+# ============================================================
+pyzmq>=25.1.0  # Blender control (opcional)
+pyyaml>=6.0  # YAML parsing
+orjson>=3.9.0  # Fast JSON (parsing large papers)
+jinja2>=3.1.0  # Template engine (report generation)

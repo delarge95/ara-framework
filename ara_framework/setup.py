@@ -24,7 +24,7 @@ setup(
     author_email="ara@example.com",
     url="https://github.com/yourusername/ara-framework",
     packages=find_packages(exclude=["tests", "tests.*", "docs"]),
-    python_requires=">=3.11",
+    python_requires='>=3.12',
     install_requires=[
         "crewai>=0.80.0",
         "crewai-tools>=0.12.0",

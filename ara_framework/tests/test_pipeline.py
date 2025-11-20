@@ -125,30 +125,25 @@ class TestPipelineExecution:
         mock_crew_output = MagicMock()
         mock_crew_output.raw = sample_literature_review
         
-        # Mock agent creation functions to avoid real Gemini initialization
-        mock_agent = MagicMock()
-        mock_task = MagicMock()
+        # Mock LangGraph research graph
+        mock_graph = MagicMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "final_report": sample_literature_review,
+                "niche_analysis": "Test analysis content",
+                "current_agent": "completed"
+            }
+        )
         
-        # Mock Crew constructor to prevent real CrewAI initialization
-        mock_crew = MagicMock()
-        
-        with patch('agents.niche_analyst.create_niche_analyst', return_value=(mock_agent, mock_task)):
-            with patch('agents.literature_researcher.create_literature_researcher', return_value=(mock_agent, mock_task)):
-                with patch('agents.technical_architect.create_technical_architect', return_value=(mock_agent, mock_task)):
-                    with patch('agents.implementation_specialist.create_implementation_specialist', return_value=(mock_agent, mock_task)):
-                        with patch('agents.content_synthesizer.create_content_synthesizer', return_value=(mock_agent, mock_task)):
-                            with patch('core.pipeline.Crew', return_value=mock_crew):
-                                with patch.object(
-                                    pipeline,
-                                    "_run_crew_with_circuit_breaker",
-                                    return_value=mock_crew_output,
-                                ):
-                                    with patch.object(
-                                        pipeline,
-                                        "_save_to_supabase",
-                                        new_callable=AsyncMock,
-                                    ):
-                                        result = await pipeline.run_analysis(sample_niche)
+        with patch('core.pipeline.create_research_graph', return_value=mock_graph):
+            with patch('core.pipeline.get_monitor'):
+                with patch('core.pipeline.GraphExecutionTracer'):
+                    with patch.object(
+                        pipeline,
+                        "_save_to_supabase",
+                        new_callable=AsyncMock,
+                    ):
+                        result = await pipeline.run_analysis(sample_niche)
         
         assert result.status == PipelineStatus.COMPLETED
         assert result.final_report is not None
@@ -184,30 +179,19 @@ class TestPipelineExecution:
             await asyncio.sleep(10)  # 10 segundos > 0.6 segundos
             return MagicMock()
         
-        # Mock agent creation functions
-        mock_agent = MagicMock()
-        mock_task = MagicMock()
+        # Mock LangGraph with slow execution
+        mock_graph = MagicMock()
+        mock_graph.ainvoke = slow_execution
         
-        # Mock Crew constructor to prevent real CrewAI initialization
-        mock_crew = MagicMock()
-        
-        with patch('agents.niche_analyst.create_niche_analyst', return_value=(mock_agent, mock_task)):
-            with patch('agents.literature_researcher.create_literature_researcher', return_value=(mock_agent, mock_task)):
-                with patch('agents.technical_architect.create_technical_architect', return_value=(mock_agent, mock_task)):
-                    with patch('agents.implementation_specialist.create_implementation_specialist', return_value=(mock_agent, mock_task)):
-                        with patch('agents.content_synthesizer.create_content_synthesizer', return_value=(mock_agent, mock_task)):
-                            with patch('core.pipeline.Crew', return_value=mock_crew):
-                                with patch.object(
-                                    pipeline,
-                                    "_run_crew_with_circuit_breaker",
-                                    side_effect=slow_execution,
-                                ):
-                                    with patch.object(
-                                        pipeline,
-                                        "_save_partial_results",
-                                        new_callable=AsyncMock,
-                                    ):
-                                        result = await pipeline.run_analysis(sample_niche)
+        with patch('core.pipeline.create_research_graph', return_value=mock_graph):
+            with patch('core.pipeline.get_monitor'):
+                with patch('core.pipeline.GraphExecutionTracer'):
+                    with patch.object(
+                        pipeline,
+                        "_save_partial_results",
+                        new_callable=AsyncMock,
+                    ):
+                        result = await pipeline.run_analysis(sample_niche)
         
         assert result.status == PipelineStatus.TIMEOUT
         assert any("timeout" in error.lower() for error in result.errors)
@@ -222,18 +206,21 @@ class TestPipelineExecution:
         pipeline = AnalysisPipeline()
         pipeline.budget_manager = mock_budget_manager
         
-        # Mock crew execution que falla
-        with patch.object(
-            pipeline,
-            "_run_crew_with_circuit_breaker",
-            side_effect=Exception("Crew execution failed"),
-        ):
-            with patch.object(
-                pipeline,
-                "_save_partial_results",
-                new_callable=AsyncMock,
-            ):
-                result = await pipeline.run_analysis(sample_niche)
+        # Mock LangGraph execution que falla
+        mock_graph = MagicMock()
+        mock_graph.ainvoke = AsyncMock(
+            side_effect=Exception("Graph execution failed")
+        )
+        
+        with patch('core.pipeline.create_research_graph', return_value=mock_graph):
+            with patch('core.pipeline.get_monitor'):
+                with patch('core.pipeline.GraphExecutionTracer'):
+                    with patch.object(
+                        pipeline,
+                        "_save_partial_results",
+                        new_callable=AsyncMock,
+                    ):
+                        result = await pipeline.run_analysis(sample_niche)
         
         assert result.status == PipelineStatus.FAILED
         assert len(result.errors) > 0

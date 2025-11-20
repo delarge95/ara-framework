@@ -23,7 +23,7 @@ Output: Reporte completo (~10000-15000 palabras) con 12 secciones
 Fuente: docs/03_AI_MODELS.md (Agent 5), docs/04_ARCHITECTURE.md (Agents Layer)
 """
 import structlog
-from crewai import Agent, Task
+# from crewai import Agent, Task  # CrewAI removed - using LangGraph only
 from typing import Dict, Any, List, Optional
 
 from config.settings import settings

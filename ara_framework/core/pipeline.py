@@ -1,14 +1,14 @@
 """
-Pipeline Orchestration - CrewAI-based analysis pipeline.
+Pipeline Orchestration - LangGraph-based analysis pipeline.
 
 Este módulo implementa el pipeline completo de análisis que coordina
-6 agentes especializados en secuencia:
+6 agentes especializados usando LangGraph StateGraph:
 
 1. NicheAnalyst → 2. LiteratureResearcher → 3. TechnicalArchitect 
 → 4. ImplementationSpecialist → 5. ContentSynthesizer
 
 El pipeline incluye:
-- Context passing automático entre agentes (task dependencies)
+- State management con LangGraph StateGraph
 - Budget tracking con BudgetManager
 - Error handling con circuit breaker y retries
 - OpenTelemetry instrumentation para observabilidad
@@ -40,12 +40,12 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
 
-from crewai import Crew, Process, Agent, Task
+# LangGraph imports
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 
-try:  # CrewAI <1.x ships CrewOutput under crewai.crews
-    from crewai.crews.crew_output import CrewOutput as CrewOutputType  # type: ignore
-except ImportError:  # CrewAI 0.11.x and similar do not expose CrewOutput
-    CrewOutputType = None  # type: ignore
+# LangGraph Monitoring
+from core.langgraph_monitoring import get_monitor, GraphExecutionTracer
 
 # Conditional imports para OpenTelemetry (opcional)
 try:
@@ -71,13 +71,7 @@ except ImportError:
 from config.settings import settings
 from core.budget_manager import BudgetManager
 from tools import get_database_tool
-from agents import (
-    create_niche_analyst,
-    create_literature_researcher,
-    create_technical_architect,
-    create_implementation_specialist,
-    create_content_synthesizer,
-)
+from graphs.research_graph import create_research_graph
 
 logger = structlog.get_logger(__name__)
 
@@ -161,10 +155,10 @@ class PipelineResult:
 
 class AnalysisPipeline:
     """
-    Pipeline de análisis que coordina 5 agentes CrewAI.
+    Pipeline de análisis que coordina 5 agentes usando LangGraph.
     
     Features:
-    - Sequential execution con context passing automático
+    - State-based execution con LangGraph StateGraph
     - Budget tracking
     - Error handling con retries
     - OpenTelemetry tracing (opcional)
@@ -339,72 +333,34 @@ class AnalysisPipeline:
                     needed=estimated_cost,
                 )
             
-            # STEP 3: Create agents and tasks
-            logger.info("creating_agents", niche=niche)
+            # STEP 3: Create LangGraph research graph with monitoring
+            logger.info("creating_research_graph", niche=niche)
             
-            # Agent 1: NicheAnalyst (no dependencies)
-            niche_agent, niche_task = create_niche_analyst(niche)
+            # Create the research graph with all agents
+            research_graph = create_research_graph()
             
-            # Agent 2: LiteratureResearcher (depends on niche_task)
-            lit_agent, lit_task = create_literature_researcher(
-                niche, niche_analysis_task=niche_task
-            )
+            # Setup monitoring
+            monitor = get_monitor()
+            execution_id = f"analysis_{niche.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            thread_id = f"thread_{execution_id}"
             
-            # Agent 3: TechnicalArchitect (depends on niche + literature)
-            arch_agent, arch_task = create_technical_architect(
-                niche, literature_research_task=lit_task
-            )
+            logger.info("research_graph_created", nodes_count=5, execution_id=execution_id)
             
-            # Agent 4: ImplementationSpecialist (depends on architecture)
-            impl_agent, impl_task = create_implementation_specialist(
-                niche, architecture_task=arch_task
-            )
-            
-            # Agent 5: ContentSynthesizer (depends on all previous)
-            synth_agent, synth_task = create_content_synthesizer(
-                niche, context_tasks=[niche_task, lit_task, arch_task, impl_task]
-            )
-            
-            logger.info("agents_created", count=5)
-            
-            # STEP 4: Create CrewAI Crew
-            # Configure embeddings for memory (using free local embeddings)
-            embedder_config = {
-                "provider": "google",  # Use Gemini embeddings (free)
-                "config": {
-                    "model": "models/embedding-001",
-                    "task_type": "retrieval_document",
-                }
-            }
-            
-            crew = Crew(
-                agents=[niche_agent, lit_agent, arch_agent, impl_agent, synth_agent],
-                tasks=[niche_task, lit_task, arch_task, impl_task, synth_task],
-                process=Process.sequential,  # Sequential execution
-                verbose=True,
-                memory=True,  # Enable memory for context
-                embedder=embedder_config,  # Use Gemini embeddings (free with API key)
-                cache=True,  # Enable caching
-                max_rpm=100,  # Rate limiting
-            )
-            
-            logger.info(
-                "crew_created",
-                agents_count=5,
-                tasks_count=5,
-                process="sequential",
-            )
-            
-            # STEP 5: Execute crew with timeout
-            crew_output = None
+            # STEP 4: Execute research graph with timeout and monitoring
+            graph_output = None
             try:
-                # Use asyncio.wait_for for timeout
-                crew_output = await asyncio.wait_for(
-                    self._run_crew_with_circuit_breaker(crew, niche),
-                    timeout=self.timeout_minutes * 60,
-                )
+                # Use asyncio.wait_for for timeout with enhanced monitoring
+                with GraphExecutionTracer(monitor, execution_id, thread_id) as tracer:
+                    tracer.log_start({"niche": niche})
+                    
+                    graph_output = await asyncio.wait_for(
+                        self._run_graph_with_circuit_breaker(research_graph, niche),
+                        timeout=self.timeout_minutes * 60,
+                    )
+                    
+                    tracer.log_completion(graph_output or {})
                 
-                logger.info("crew_execution_completed")
+                logger.info("graph_execution_completed", execution_id=execution_id)
                 
             except asyncio.TimeoutError:
                 result.status = PipelineStatus.TIMEOUT
@@ -418,16 +374,16 @@ class AnalysisPipeline:
             
             except Exception as e:
                 result.status = PipelineStatus.FAILED
-                error_msg = f"Crew execution failed: {str(e)}"
+                error_msg = f"Graph execution failed: {str(e)}"
                 result.errors.append(error_msg)
-                logger.error("crew_execution_failed", error=str(e), exc_info=True)
+                logger.error("graph_execution_failed", error=str(e), exc_info=True)
                 
                 # Save partial results
                 await self._save_partial_results(result, niche)
                 return result
             
-            # STEP 6: Extract final report
-            final_report = self._normalize_crew_output(crew_output)
+            # STEP 5: Extract final report
+            final_report = self._normalize_graph_output(graph_output)
             if final_report:
                 result.final_report = final_report
                 result.status = PipelineStatus.COMPLETED
@@ -438,11 +394,11 @@ class AnalysisPipeline:
                 )
             else:
                 result.status = PipelineStatus.FAILED
-                result.errors.append("No output from crew")
-                logger.error("no_crew_output")
+                result.errors.append("No output from graph")
+                logger.error("no_graph_output")
                 return result
             
-            # STEP 7: Calculate metrics
+            # STEP 6: Calculate metrics
             result.end_time = datetime.now(timezone.utc)
             result.duration_seconds = (
                 result.end_time - result.start_time
@@ -460,7 +416,7 @@ class AnalysisPipeline:
                 credits_used=result.total_credits_used,
             )
             
-            # STEP 8: Save to Supabase
+            # STEP 7: Save to Supabase
             try:
                 await self._save_to_supabase(result)
             except Exception as e:
@@ -501,90 +457,71 @@ class AnalysisPipeline:
                 span.set_attribute("credits_used", result.total_credits_used)
                 span.end()
     
-    async def _run_crew_with_circuit_breaker(
-        self, crew: Crew, niche: str
+    async def _run_graph_with_circuit_breaker(
+        self, research_graph, niche: str
     ) -> Any:
         """
-        Ejecuta crew con circuit breaker (si está habilitado).
+        Ejecuta LangGraph con circuit breaker (si está habilitado).
         
         Args:
-            crew: Crew configurado
+            research_graph: LangGraph StateGraph configurado
             niche: Nombre del niche
         
         Returns:
-            CrewOutput
+            Graph state result
         """
-        async def _execute_kickoff() -> Any:
-            kickoff_async = getattr(crew, "kickoff_async", None)
-            if kickoff_async and callable(kickoff_async):
-                try:
-                    signature = inspect.signature(kickoff_async)
-                    if "inputs" in signature.parameters:
-                        return await kickoff_async(inputs={"niche": niche})
-                except (TypeError, ValueError):
-                    pass
-                return await kickoff_async()
-
-            kickoff = getattr(crew, "kickoff", None)
-            if not callable(kickoff):
-                raise AttributeError("Crew instance has no kickoff method")
-
-            loop = asyncio.get_running_loop()
-
-            def _sync_kickoff() -> Any:
-                try:
-                    signature = inspect.signature(kickoff)
-                    if "inputs" in signature.parameters:
-                        return kickoff(inputs={"niche": niche})
-                except (TypeError, ValueError):
-                    pass
-                return kickoff()
-
-            return await loop.run_in_executor(None, _sync_kickoff)
+        async def _execute_graph() -> Any:
+            # Initialize state with niche
+            initial_state = {"niche": niche}
+            
+            # Configure checkpointing with required thread_id
+            config = {
+                "configurable": {
+                    "thread_id": f"analysis_{niche.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                }
+            }
+            
+            # Run the graph with config
+            result = await research_graph.ainvoke(initial_state, config=config)
+            return result
 
         if self.circuit_breaker:
             # Wrap en circuit breaker
             @self.circuit_breaker
             async def execute():
-                return await _execute_kickoff()
+                return await _execute_graph()
 
             return await execute()
 
         # Sin circuit breaker
-        return await _execute_kickoff()
+        return await _execute_graph()
 
-    def _normalize_crew_output(self, crew_output: Any) -> Optional[str]:
-        """Compatibiliza diferentes versiones de CrewAI devolviendo un string."""
-        if crew_output is None:
+    def _normalize_graph_output(self, graph_output: Any) -> Optional[str]:
+        """Extrae el resultado final del LangGraph state."""
+        if graph_output is None:
             return None
 
-        if CrewOutputType and isinstance(crew_output, CrewOutputType):
-            raw_value = getattr(crew_output, "raw", None)
-            if raw_value:
-                return str(raw_value)
-            final_output = getattr(crew_output, "final_output", None)
-            if final_output:
-                return str(final_output)
-
-        if isinstance(crew_output, str):
-            return crew_output
-
-        if isinstance(crew_output, bytes):
-            try:
-                return crew_output.decode("utf-8")
-            except UnicodeDecodeError:
-                return crew_output.decode("latin-1", errors="ignore")
-
-        if isinstance(crew_output, dict):
-            for key in ("raw", "final_output", "output"):
-                value = crew_output.get(key)
+        # LangGraph returns state dict
+        if isinstance(graph_output, dict):
+            # Check for final report in various possible keys
+            for key in ("final_report", "report", "output", "result", "content"):
+                value = graph_output.get(key)
                 if value:
                     return str(value)
+            
+            # If no specific key found, try to get the last meaningful value
+            # Skip system keys like '__root__', 'messages', etc.
+            for key, value in graph_output.items():
+                if not key.startswith('_') and value and isinstance(value, (str, dict)):
+                    if isinstance(value, dict) and 'content' in value:
+                        return str(value['content'])
+                    elif isinstance(value, str) and len(value) > 100:  # Assume substantial content
+                        return value
 
-        if hasattr(crew_output, "raw") and getattr(crew_output, "raw"):
-            return str(getattr(crew_output, "raw"))
+        if isinstance(graph_output, str):
+            return graph_output
 
-        return str(crew_output)
+        return str(graph_output)
     
     async def _save_to_supabase(self, result: PipelineResult):
         """

@@ -1,0 +1,465 @@
+"""
+Tests for Pipeline - CrewAI orchestration and execution.
+
+Tests:
+- Pipeline initialization
+- Input validation
+- Agent creation
+- Crew execution
+- Error handling
+- Timeout handling
+- Result saving (Supabase + local)
+"""
+import pytest
+import sys
+import types
+from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from datetime import datetime, timezone
+import asyncio
+
+# Prefer real CrewAI modules when available; fall back to mocks for older versions
+try:
+    from core.pipeline import (
+        AnalysisPipeline,
+        PipelineResult,
+        PipelineStatus,
+        AgentResult,
+        run_quick_analysis,
+    )
+except (ImportError, ModuleNotFoundError, AttributeError, ImportWarning):
+    from pydantic import BaseModel
+
+    for key in [
+        'crewai',
+        'crewai.rag',
+        'crewai.rag.embeddings',
+        'crewai.rag.embeddings.factory',
+        'crewai.rag.embeddings.types',
+        'crewai.rag.types',
+    ]:
+        sys.modules.pop(key, None)
+
+    rag_module = types.ModuleType('crewai.rag')
+    rag_module.__path__ = []
+    embeddings_module = types.ModuleType('crewai.rag.embeddings')
+
+    class _StubEmbedderConfig(BaseModel):  # minimal stub to satisfy Pydantic typing
+        model_config = {'arbitrary_types_allowed': True}
+
+    embeddings_module.EmbedderConfig = _StubEmbedderConfig
+
+    factory_module = types.ModuleType('crewai.rag.embeddings.factory')
+
+    def _stub_build_embedder(*args, **kwargs):
+        raise NotImplementedError("Embedder stub invoked during tests")
+
+    factory_module.build_embedder = _stub_build_embedder
+
+    rag_types_module = types.ModuleType('crewai.rag.types')
+    embeddings_types_module = types.ModuleType('crewai.rag.embeddings.types')
+
+    class _StubSearchResult:
+        def __init__(self, *args, **kwargs):
+            self.content = kwargs.get('content', '')
+
+    rag_types_module.SearchResult = _StubSearchResult
+    rag_types_module.BaseRecord = type('BaseRecord', (), {})
+    embeddings_types_module.ProviderSpec = type('ProviderSpec', (), {})
+    embeddings_types_module.EmbedderConfig = _StubEmbedderConfig
+
+    rag_module.embeddings = embeddings_module
+    rag_module.types = rag_types_module
+    embeddings_module.types = embeddings_types_module
+
+    memory_module = types.ModuleType('crewai.memory')
+    memory_entity_module = types.ModuleType('crewai.memory.entity')
+    entity_memory_module = types.ModuleType('crewai.memory.entity.entity_memory')
+    entity_memory_item_module = types.ModuleType('crewai.memory.entity.entity_memory_item')
+    memory_storage_module = types.ModuleType('crewai.memory.storage')
+    rag_storage_module = types.ModuleType('crewai.memory.storage.rag_storage')
+    long_term_module = types.ModuleType('crewai.memory.long_term')
+    long_term_memory_module = types.ModuleType('crewai.memory.long_term.long_term_memory')
+    long_term_memory_item_module = types.ModuleType('crewai.memory.long_term.long_term_memory_item')
+
+    memory_module.__path__ = []
+    memory_entity_module.__path__ = []
+    memory_storage_module.__path__ = []
+    long_term_module.__path__ = []
+
+    class _StubEntityMemoryItem(BaseModel):
+        pass
+
+    class _StubEntityMemory(BaseModel):
+        pass
+
+    class _StubMemory(BaseModel):
+        model_config = {'arbitrary_types_allowed': True}
+
+    class _StubRAGStorage(BaseModel):
+        pass
+
+    class _StubLongTermMemoryItem(BaseModel):
+        pass
+
+    class _StubLongTermMemory(BaseModel):
+        pass
+
+    entity_memory_item_module.EntityMemoryItem = _StubEntityMemoryItem
+    entity_memory_module.EntityMemory = _StubEntityMemory
+    memory_module.EntityMemory = _StubEntityMemory
+    memory_module.Memory = _StubMemory
+    rag_storage_module.RAGStorage = _StubRAGStorage
+    long_term_memory_item_module.LongTermMemoryItem = _StubLongTermMemoryItem
+    long_term_memory_module.LongTermMemory = _StubLongTermMemory
+
+    long_term_module.long_term_memory = long_term_memory_module
+    long_term_module.long_term_memory_item = long_term_memory_item_module
+
+    memory_entity_module.entity_memory = entity_memory_module
+    memory_entity_module.entity_memory_item = entity_memory_item_module
+    memory_module.entity = memory_entity_module
+    memory_storage_module.rag_storage = rag_storage_module
+    memory_module.storage = memory_storage_module
+    memory_module.long_term = long_term_module
+
+    with patch.dict('sys.modules', {
+        'crewai.rag': rag_module,
+        'crewai.rag.embeddings': embeddings_module,
+        'crewai.rag.embeddings.factory': factory_module,
+        'crewai.rag.embeddings.types': embeddings_types_module,
+        'crewai.rag.types': rag_types_module,
+        'crewai.memory': memory_module,
+        'crewai.memory.entity': memory_entity_module,
+        'crewai.memory.entity.entity_memory': entity_memory_module,
+        'crewai.memory.entity.entity_memory_item': entity_memory_item_module,
+        'crewai.memory.storage': memory_storage_module,
+        'crewai.memory.storage.rag_storage': rag_storage_module,
+        'crewai.memory.long_term': long_term_module,
+        'crewai.memory.long_term.long_term_memory': long_term_memory_module,
+        'crewai.memory.long_term.long_term_memory_item': long_term_memory_item_module,
+    }):
+        from core.pipeline import (
+            AnalysisPipeline,
+            PipelineResult,
+            PipelineStatus,
+            AgentResult,
+            run_quick_analysis,
+        )
+
+
+class TestPipelineInitialization:
+    """Tests para inicialización del pipeline."""
+    
+    def test_pipeline_initialization_default(self):
+        """Test inicialización con valores default."""
+        pipeline = AnalysisPipeline()
+        
+        assert pipeline.max_retries == 3
+        assert pipeline.timeout_minutes == 90
+        assert pipeline.budget_manager is not None
+        assert pipeline.database_tool is not None
+    
+    def test_pipeline_initialization_custom(self):
+        """Test inicialización con valores custom."""
+        pipeline = AnalysisPipeline(
+            max_retries=5,
+            timeout_minutes=120,
+            enable_telemetry=False,
+            enable_circuit_breaker=False,
+        )
+        
+        assert pipeline.max_retries == 5
+        assert pipeline.timeout_minutes == 120
+
+
+class TestInputValidation:
+    """Tests para validación de inputs."""
+    
+    def test_validate_niche_valid(self):
+        """Test validación de niche válido."""
+        pipeline = AnalysisPipeline()
+        
+        is_valid, error = pipeline._validate_niche("Rust WASM for audio")
+        
+        assert is_valid is True
+        assert error is None
+    
+    def test_validate_niche_empty(self):
+        """Test validación de niche vacío."""
+        pipeline = AnalysisPipeline()
+        
+        is_valid, error = pipeline._validate_niche("")
+        
+        assert is_valid is False
+        assert "empty" in error.lower()
+    
+    def test_validate_niche_too_short(self):
+        """Test validación de niche muy corto."""
+        pipeline = AnalysisPipeline()
+        
+        is_valid, error = pipeline._validate_niche("Rust")
+        
+        assert is_valid is False
+        assert "short" in error.lower()
+    
+    def test_validate_niche_too_long(self):
+        """Test validación de niche muy largo."""
+        pipeline = AnalysisPipeline()
+        
+        long_niche = "A" * 300
+        is_valid, error = pipeline._validate_niche(long_niche)
+        
+        assert is_valid is False
+        assert "long" in error.lower()
+    
+    def test_validate_niche_suspicious_chars(self):
+        """Test validación de caracteres sospechosos."""
+        pipeline = AnalysisPipeline()
+        
+        is_valid, error = pipeline._validate_niche("Rust <script>alert</script>")
+        
+        assert is_valid is False
+        assert "suspicious" in error.lower()
+
+
+class TestPipelineExecution:
+    """Tests para ejecución del pipeline."""
+    
+    @pytest.mark.asyncio
+    async def test_run_analysis_success(
+        self,
+        sample_niche,
+        sample_literature_review,
+        mock_budget_manager,
+    ):
+        """Test ejecución exitosa del pipeline."""
+        pipeline = AnalysisPipeline()
+        
+        # Mock budget manager
+        pipeline.budget_manager = mock_budget_manager
+        
+        # Mock crew execution
+        mock_crew_output = MagicMock()
+        mock_crew_output.raw = sample_literature_review
+        
+        with patch.object(
+            pipeline,
+            "_run_crew_with_circuit_breaker",
+            return_value=mock_crew_output,
+        ):
+            with patch.object(
+                pipeline,
+                "_save_to_supabase",
+                new_callable=AsyncMock,
+            ):
+                result = await pipeline.run_analysis(sample_niche)
+        
+        assert result.status == PipelineStatus.COMPLETED
+        assert result.final_report is not None
+        assert len(result.final_report) > 0
+        assert result.niche == sample_niche
+    
+    @pytest.mark.asyncio
+    async def test_run_analysis_invalid_input(self):
+        """Test con input inválido."""
+        pipeline = AnalysisPipeline()
+        
+        result = await pipeline.run_analysis("")
+        
+        assert result.status == PipelineStatus.FAILED
+        assert len(result.errors) > 0
+        assert "validation" in result.errors[0].lower()
+    
+    @pytest.mark.asyncio
+    async def test_run_analysis_timeout(
+        self,
+        sample_niche,
+        mock_budget_manager,
+    ):
+        """Test timeout del pipeline."""
+        pipeline = AnalysisPipeline(timeout_minutes=0.01)  # 0.01 min = 0.6 sec
+        pipeline.budget_manager = mock_budget_manager
+        
+        # Mock crew execution que tarda mucho
+        async def slow_execution(*args, **kwargs):
+            await asyncio.sleep(10)  # 10 segundos > 0.6 segundos
+            return MagicMock()
+        
+        with patch.object(
+            pipeline,
+            "_run_crew_with_circuit_breaker",
+            side_effect=slow_execution,
+        ):
+            with patch.object(
+                pipeline,
+                "_save_partial_results",
+                new_callable=AsyncMock,
+            ):
+                result = await pipeline.run_analysis(sample_niche)
+        
+        assert result.status == PipelineStatus.TIMEOUT
+        assert any("timeout" in error.lower() for error in result.errors)
+    
+    @pytest.mark.asyncio
+    async def test_run_analysis_crew_failure(
+        self,
+        sample_niche,
+        mock_budget_manager,
+    ):
+        """Test cuando crew falla."""
+        pipeline = AnalysisPipeline()
+        pipeline.budget_manager = mock_budget_manager
+        
+        # Mock crew execution que falla
+        with patch.object(
+            pipeline,
+            "_run_crew_with_circuit_breaker",
+            side_effect=Exception("Crew execution failed"),
+        ):
+            with patch.object(
+                pipeline,
+                "_save_partial_results",
+                new_callable=AsyncMock,
+            ):
+                result = await pipeline.run_analysis(sample_niche)
+        
+        assert result.status == PipelineStatus.FAILED
+        assert len(result.errors) > 0
+
+
+class TestResultSaving:
+    """Tests para guardado de resultados."""
+    
+    @pytest.mark.asyncio
+    async def test_save_to_supabase_success(
+        self,
+        sample_niche,
+        sample_literature_review,
+        mock_supabase_client,
+    ):
+        """Test guardado exitoso en Supabase."""
+        pipeline = AnalysisPipeline()
+        
+        # Mock database tool
+        pipeline.database_tool.save_analysis = AsyncMock(
+            return_value={"id": "test-id-123"}
+        )
+        
+        result = PipelineResult(
+            niche=sample_niche,
+            status=PipelineStatus.COMPLETED,
+            final_report=sample_literature_review,
+        )
+        result.end_time = datetime.now(timezone.utc)
+        
+        await pipeline._save_to_supabase(result)
+        
+        assert result.supabase_saved is True
+        assert result.supabase_record_id == "test-id-123"
+    
+    @pytest.mark.asyncio
+    async def test_save_to_supabase_failure(
+        self,
+        sample_niche,
+        sample_literature_review,
+    ):
+        """Test cuando Supabase falla."""
+        pipeline = AnalysisPipeline()
+        
+        # Mock database tool to fail
+        pipeline.database_tool.save_analysis = AsyncMock(
+            side_effect=Exception("Supabase error")
+        )
+        
+        result = PipelineResult(
+            niche=sample_niche,
+            status=PipelineStatus.COMPLETED,
+            final_report=sample_literature_review,
+        )
+        
+        with pytest.raises(Exception):
+            await pipeline._save_to_supabase(result)
+    
+    @pytest.mark.asyncio
+    async def test_save_locally(
+        self,
+        sample_niche,
+        sample_literature_review,
+        temp_output_dir,
+    ):
+        """Test guardado local como backup."""
+        pipeline = AnalysisPipeline()
+        
+        result = PipelineResult(
+            niche=sample_niche,
+            status=PipelineStatus.COMPLETED,
+            final_report=sample_literature_review,
+        )
+        result.end_time = datetime.now(timezone.utc)
+        
+        with patch("core.pipeline.Path", return_value=temp_output_dir):
+            await pipeline._save_locally(result)
+        
+        assert result.local_backup_path is not None
+
+
+class TestPipelineResult:
+    """Tests para PipelineResult dataclass."""
+    
+    def test_pipeline_result_creation(self, sample_niche):
+        """Test creación de PipelineResult."""
+        result = PipelineResult(
+            niche=sample_niche,
+            status=PipelineStatus.RUNNING,
+        )
+        
+        assert result.niche == sample_niche
+        assert result.status == PipelineStatus.RUNNING
+        assert result.final_report is None
+        assert len(result.agent_results) == 0
+        assert len(result.errors) == 0
+    
+    def test_pipeline_result_to_dict(self, sample_niche):
+        """Test serialización a dict."""
+        result = PipelineResult(
+            niche=sample_niche,
+            status=PipelineStatus.COMPLETED,
+            final_report="Test report",
+        )
+        result.end_time = datetime.now(timezone.utc)
+        
+        data = result.to_dict()
+        
+        assert data["niche"] == sample_niche
+        assert data["status"] == "completed"
+        assert data["final_report"] == "Test report"
+        assert "start_time" in data
+        assert "end_time" in data
+
+
+class TestHelperFunctions:
+    """Tests para funciones helper."""
+    
+    @pytest.mark.asyncio
+    async def test_run_quick_analysis(
+        self,
+        sample_niche,
+        sample_literature_review,
+        mock_budget_manager,
+    ):
+        """Test helper run_quick_analysis."""
+        # Mock pipeline
+        with patch("core.pipeline.AnalysisPipeline") as MockPipeline:
+            mock_instance = MockPipeline.return_value
+            mock_instance.run_analysis = AsyncMock(
+                return_value=PipelineResult(
+                    niche=sample_niche,
+                    status=PipelineStatus.COMPLETED,
+                    final_report=sample_literature_review,
+                )
+            )
+            
+            result = await run_quick_analysis(sample_niche)
+            
+            assert result.status == PipelineStatus.COMPLETED
+            assert result.niche == sample_niche

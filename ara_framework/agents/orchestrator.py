@@ -5,7 +5,7 @@ from textwrap import dedent
 from typing import Any, Dict, Optional
 
 import structlog
-from crewai import Agent, Task
+# from crewai import Agent, Task  # LEGACY: CrewAI removed, using LangGraph only
 
 from config.settings import settings
 from core.budget_manager import BudgetManager

@@ -51,7 +51,7 @@ class ScrapingTool:
             await self.adapter.connect()
             self._connected = True
     
-    @tool("Scrape Website")
+    @tool("scrape_website")
     async def scrape_website(
         url: str,
         wait_for_selector: Optional[str] = None,
@@ -119,7 +119,7 @@ class ScrapingTool:
                 "metadata": {"error": str(e)},
             }
     
-    @tool("Extract Structured Data")
+    @tool("extract_structured_data")
     async def extract_structured_data(
         url: str,
         selectors: Dict[str, str],
@@ -177,7 +177,7 @@ class ScrapingTool:
             )
             return {field: None for field in selectors.keys()}
     
-    @tool("Scrape Multiple URLs")
+    @tool("scrape_multiple_urls")
     async def scrape_multiple_urls(
         urls: List[str],
         max_concurrent: int = 3,
@@ -224,7 +224,7 @@ class ScrapingTool:
             )
             return []
     
-    @tool("Take Screenshot")
+    @tool("take_screenshot")
     async def take_screenshot(
         url: str,
         path: Optional[str] = None,
@@ -275,7 +275,7 @@ class ScrapingTool:
             )
             return ""
     
-    @tool("Execute JavaScript")
+    @tool("execute_javascript")
     async def execute_javascript(
         url: str,
         script: str,
@@ -370,3 +370,114 @@ def get_scraping_tool(redis_client=None) -> ScrapingTool:
         ScrapingTool instance
     """
     return _get_scraping_tool_instance(redis_client)
+
+
+# ============================================================
+# Module-level tool functions (LangChain @tool decorated)
+# ============================================================
+# These functions are defined at module level to avoid issues
+# with @tool decorator and class methods. They use the singleton
+# instance internally via _get_scraping_tool_instance().
+# ============================================================
+
+@tool("scrape_website")
+async def scrape_website(
+    url: str,
+    wait_for_selector: Optional[str] = None,
+    include_html: bool = False,
+) -> Dict[str, Any]:
+    """
+    Extrae contenido completo de una página web.
+    
+    Este tool usa Playwright para navegar y extraer contenido de páginas web,
+    con soporte para JavaScript rendering y anti-detection.
+    
+    Args:
+        url (str): URL de la página a scrapear
+        wait_for_selector (str, optional): Selector CSS para esperar antes de extraer
+        include_html (bool): Si incluir HTML completo en resultado
+    
+    Returns:
+        Dict: Contenido scrapeado con estructura:
+            - url: URL original
+            - title: Título de la página
+            - text: Texto extraído (limpio)
+            - html: HTML completo (si include_html=True)
+            - metadata: Metadata adicional (final_url, status, etc.)
+    
+    Example:
+        # Scraping simple
+        content = scrape_website("https://example.com")
+        
+        # Esperar elemento específico
+        content = scrape_website(
+            "https://spa-app.com",
+            wait_for_selector=".main-content"
+        )
+    """
+    tool_instance = _get_scraping_tool_instance()
+    await tool_instance._ensure_connected()
+    
+    try:
+        result = await tool_instance.adapter.scrape_page(
+            url=url,
+            wait_for_selector=wait_for_selector,
+            include_html=include_html,
+        )
+        
+        logger.info(
+            "scraping_tool_executed",
+            url=url,
+            text_length=len(result.text),
+        )
+        
+        return result.to_dict()
+    
+    except Exception as e:
+        logger.error(
+            "scraping_tool_failed",
+            url=url,
+            error=str(e),
+        )
+        return {
+            "url": url,
+            "title": "",
+            "text": "",
+            "html": None,
+            "metadata": {"error": str(e)},
+        }
+
+
+@tool("scrape_multiple_urls")
+async def scrape_multiple_urls(
+    urls: List[str],
+    max_concurrent: int = 3,
+) -> List[Dict[str, Any]]:
+    """
+    Extrae contenido de múltiples URLs en paralelo.
+    
+    Args:
+        urls: Lista de URLs a scrapear
+        max_concurrent: Máximo número de scrapes simultáneos
+    
+    Returns:
+        List[Dict]: Lista de resultados (mismo formato que scrape_website)
+    """
+    tool_instance = _get_scraping_tool_instance()
+    await tool_instance._ensure_connected()
+    
+    async def scrape_one(url: str):
+        try:
+            return await tool_instance.adapter.scrape_page(url=url)
+        except Exception as e:
+            logger.error("parallel_scrape_failed", url=url, error=str(e))
+            return None
+    
+    # Process in batches
+    results = []
+    for i in range(0, len(urls), max_concurrent):
+        batch = urls[i:i + max_concurrent]
+        batch_results = await asyncio.gather(*[scrape_one(url) for url in batch])
+        results.extend([r.to_dict() if r else None for r in batch_results])
+    
+    return [r for r in results if r is not None]

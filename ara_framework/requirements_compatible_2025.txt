@@ -1,0 +1,103 @@
+# ============================================================
+# ARA FRAMEWORK - COMPATIBLE DEPENDENCY SET
+# Python 3.12 + CrewAI 0.100.0
+# Generado: 2025-05-XX - GitHub Copilot ULTRATHINK Analysis
+# ============================================================
+
+# ============================================================
+# CORE FRAMEWORK - CrewAI 0.100.0 (Stable Pre-1.x)
+# ============================================================
+crewai==0.100.0  # Multi-agent framework (versión estable pre-1.x, bundled tools)
+
+# ============================================================
+# WEB FRAMEWORK
+# ============================================================
+fastapi>=0.109.0,<1.0.0  # API framework (15-20K RPS)
+uvicorn[standard]>=0.27.0,<1.0.0  # ASGI server
+pydantic>=2.5.0,<3.0.0  # Data validation
+pydantic-settings>=2.1.0,<3.0.0  # Settings management
+
+# ============================================================
+# AI MODELS - Versiones Compatibles con CrewAI 0.100.0
+# ============================================================
+openai>=1.50.0,<2.0.0  # GPT models (CrewAI 0.100.0 requiere <2.0.0)
+anthropic>=0.18.0  # Claude models
+google-generativeai>=0.3.0  # Gemini models (free tier: 1500 req/día)
+
+# ============================================================
+# LANGCHAIN - Versiones Compatibles con CrewAI 0.100.0
+# ============================================================
+langchain>=0.1.0,<0.2.0  # Core framework
+langchain-core>=0.1.0,<0.2.0
+langchain-openai>=0.0.5,<0.1.0  # Compatible con openai <2.0.0
+langchain-community>=0.0.38,<0.1.0
+langchain-google-genai>=0.0.6,<1.0.0
+langchain-text-splitters>=0.0.1,<0.1.0
+langchain-anthropic>=0.1.0,<0.2.0
+
+# ============================================================
+# MCP & AUTOMATION
+# ============================================================
+mcp>=0.9.0  # Model Context Protocol SDK
+playwright>=1.42.0  # Browser automation
+httpx>=0.26.0  # Async HTTP client
+aiofiles>=23.2.1  # Async file operations
+
+# ============================================================
+# DATA INGESTION - Papers, PDFs, Web Scraping
+# ============================================================
+semanticscholar>=0.8.0  # Semantic Scholar API (1 req/seg)
+arxiv>=2.1.0  # arXiv API
+unstructured[pdf]>=0.12.0  # PDF processing (hybrid strategy)
+pymupdf>=1.23.0  # PyMuPDF (fast extraction)
+markitdown>=0.0.1  # Microsoft MarkItDown (MCP server)
+beautifulsoup4>=4.12.0  # HTML parsing
+lxml>=5.0.0  # XML/HTML parser
+
+# ============================================================
+# STORAGE & CACHING - Valkey/Redis + Supabase
+# ============================================================
+redis>=5.0.0  # Valkey client (Redis fork)
+hiredis>=2.3.0  # Fast Redis parser
+supabase>=2.3.0  # PostgreSQL + Storage (500MB gratis)
+
+# ============================================================
+# OBSERVABILITY - OpenTelemetry + Uptrace
+# ============================================================
+opentelemetry-api>=1.22.0
+opentelemetry-sdk>=1.22.0
+opentelemetry-instrumentation-fastapi>=0.43b0
+uptrace>=1.22.0  # Backend (1TB traces/mes gratis)
+
+# ============================================================
+# CLI & LOGGING
+# ============================================================
+typer>=0.9.0  # CLI framework
+rich>=13.7.0  # Rich terminal output
+structlog>=24.1.0  # Structured logging
+python-dotenv>=1.0.0  # .env file support
+
+# ============================================================
+# TESTING
+# ============================================================
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# ============================================================
+# RESILIENCE - Circuit Breaker, Retry, Rate Limiting
+# ============================================================
+pybreaker>=1.0.0  # Circuit breaker pattern
+tenacity>=8.0.0,<9.0.0  # Retry with exponential backoff (langchain requiere <9.0.0)
+aiolimiter>=1.1.0  # Async rate limiter
+
+# ============================================================
+# UTILITIES - NumPy, Protobuf, etc.
+# ============================================================
+numpy>=1.26.0,<2.0.0  # Compatible con langchain (requiere <2.0.0)
+protobuf>=4.25.0,<5.0.0  # Compatible con google-ai-generativelanguage
+pyzmq>=25.1.0  # Blender control (opcional)
+pyyaml>=6.0  # YAML parsing
+orjson>=3.9.0  # Fast JSON (parsing large papers)
+jinja2>=3.1.0  # Template engine (report generation)

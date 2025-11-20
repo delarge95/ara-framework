@@ -166,7 +166,7 @@ class PlaywrightAdapter(MCPAdapter[ScrapedContent]):
         self,
         url: str,
         wait_for_selector: Optional[str] = None,
-        wait_timeout: int = 30000,
+        wait_timeout: int = 15000,  # Reducido de 30s a 15s
         include_html: bool = False,
     ) -> ScrapedContent:
         """
@@ -175,7 +175,7 @@ class PlaywrightAdapter(MCPAdapter[ScrapedContent]):
         Args:
             url: URL a scrapear
             wait_for_selector: Selector CSS para esperar antes de scrapear
-            wait_timeout: Timeout en ms (default 30s)
+            wait_timeout: Timeout en ms (default 15s, reducido de 30s)
             include_html: Si incluir HTML completo en resultado
         
         Returns:
@@ -196,9 +196,19 @@ class PlaywrightAdapter(MCPAdapter[ScrapedContent]):
             # Navigate
             await page.goto(url, wait_until="domcontentloaded", timeout=wait_timeout)
             
-            # Wait for specific selector if provided
+            # Wait for specific selector if provided (con fallback)
             if wait_for_selector:
-                await page.wait_for_selector(wait_for_selector, timeout=wait_timeout)
+                try:
+                    await page.wait_for_selector(wait_for_selector, timeout=wait_timeout)
+                except Exception as e:
+                    # Si falla selector específico, continuar con scraping genérico
+                    self.logger.warning(
+                        "selector_wait_failed_using_fallback",
+                        url=url,
+                        selector=wait_for_selector,
+                        error=str(e),
+                    )
+                    # Continuar sin error - scraping genérico
             
             # Extract content
             title = await page.title()

@@ -47,7 +47,7 @@ class SearchTool:
             await self.adapter.connect()
             self._connected = True
     
-    @tool("Search Academic Papers")
+    @tool("search_academic_papers")
     async def search_academic_papers(
         query: str,
         limit: int = 10,
@@ -117,7 +117,7 @@ class SearchTool:
             )
             return []
     
-    @tool("Search Papers in Parallel")
+    @tool("search_papers_in_parallel")
     async def search_papers_parallel(
         query: str,
         total: int = 100,
@@ -178,7 +178,7 @@ class SearchTool:
             )
             return []
     
-    @tool("Get Paper Details")
+    @tool("get_paper_details")
     async def get_paper_details(paper_id: str) -> Optional[Dict[str, Any]]:
         """
         Obtiene detalles completos de un paper específico.
@@ -218,7 +218,7 @@ class SearchTool:
             )
             return None
     
-    @tool("Get Related Papers")
+    @tool("get_related_papers")
     async def get_related_papers(
         paper_id: str,
         limit: int = 10,
@@ -265,7 +265,7 @@ class SearchTool:
             )
             return []
     
-    @tool("Search Recent Papers")
+    @tool("search_recent_papers")
     async def search_recent_papers(
         query: str,
         years_back: int = 2,
@@ -359,3 +359,213 @@ def get_search_tool(redis_client=None) -> SearchTool:
         _search_tool_instance = SearchTool(redis_client=redis_client)
     
     return _search_tool_instance
+
+
+# ============================================================
+# Module-level tool functions (LangChain @tool decorated)
+# ============================================================
+
+@tool("search_recent_papers")
+async def search_recent_papers(
+    query: str,
+    years_back: int = 2,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """
+    Busca papers recientes (últimos N años) con paginación inteligente.
+    
+    OPTIMIZACIÓN: Si limit > 50, divide en múltiples requests pequeños
+    para evitar token limits en modelos como GPT-4o (8K max).
+    
+    Args:
+        query (str): Query de búsqueda
+        years_back (int): Cuántos años hacia atrás (default 2)
+        limit (int): Número de resultados (default 20, max 100)
+    
+    Returns:
+        List[Dict]: Papers recientes ordenados por citaciones (max 100 total)
+    
+    Example:
+        # Papers de los últimos 2 años (paginado automáticamente)
+        recent = search_recent_papers(
+            "generative AI",
+            years_back=2,
+            limit=100  # Se divide en 5 requests de 20
+        )
+    """
+    from datetime import datetime
+    
+    tool_instance = get_search_tool()
+    current_year = datetime.now().year
+    year_from = current_year - years_back
+    
+    if not tool_instance._connected:
+        await tool_instance.adapter.connect()
+        tool_instance._connected = True
+    
+    try:
+        # PAGINACIÓN: Si limit > 50, dividir en chunks de 20
+        # Para evitar token limits (GPT-4o max 8K tokens en request body)
+        if limit > 50:
+            page_size = 20
+            num_pages = min(5, (limit + page_size - 1) // page_size)  # Max 5 páginas (100 total)
+            all_papers = []
+            
+            logger.info(
+                "paginated_search_started",
+                query=query,
+                total_limit=limit,
+                page_size=page_size,
+                num_pages=num_pages,
+            )
+            
+            for page in range(num_pages):
+                papers = await tool_instance.adapter.search_papers(
+                    query=query,
+                    limit=page_size,
+                    offset=page * page_size,
+                    year_from=year_from,
+                )
+                all_papers.extend(papers)
+                
+                logger.info(
+                    "page_fetched",
+                    page=page + 1,
+                    fetched=len(papers),
+                    total_so_far=len(all_papers),
+                )
+                
+                # Si una página devuelve menos resultados, no hay más
+                if len(papers) < page_size:
+                    break
+            
+            papers = all_papers[:limit]  # Limitar al número solicitado
+        else:
+            # Request normal (limit <= 50)
+            papers = await tool_instance.adapter.search_papers(
+                query=query,
+                limit=limit,
+                year_from=year_from,
+            )
+        
+        # Sort by citation count (más citados primero)
+        papers_sorted = sorted(
+            papers,
+            key=lambda p: p.citation_count,
+            reverse=True,
+        )
+        
+        logger.info(
+            "recent_papers_found",
+            query=query,
+            count=len(papers_sorted),
+            years_back=years_back,
+            paginated=limit > 50,
+        )
+        
+        return [p.to_dict() for p in papers_sorted]
+    
+    except Exception as e:
+        # Si falla por rate limit, intentar con backoff exponencial
+        if "429" in str(e) or "rate limit" in str(e).lower():
+            logger.warning(
+                "rate_limit_detected_retrying",
+                query=query,
+                error=str(e),
+            )
+            return await _search_with_backoff(tool_instance, query, year_from, limit)
+        
+        logger.error(
+            "search_recent_papers_failed",
+            query=query,
+            error=str(e),
+        )
+        return []
+
+
+async def _search_with_backoff(
+    tool_instance,
+    query: str,
+    year_from: int,
+    limit: int,
+    max_retries: int = 3,
+) -> List[Dict[str, Any]]:
+    """
+    Implementa backoff exponencial para manejar rate limits de Semantic Scholar.
+    
+    Estrategia:
+    - Retry 1: Esperar 2 segundos
+    - Retry 2: Esperar 4 segundos
+    - Retry 3: Esperar 8 segundos
+    
+    Args:
+        tool_instance: Instancia de SearchTool
+        query: Query de búsqueda
+        year_from: Año desde el cual buscar
+        limit: Número de resultados
+        max_retries: Número máximo de reintentos (default 3)
+    
+    Returns:
+        List[Dict]: Papers encontrados o lista vacía si fallan todos los reintentos
+    """
+    import random
+    
+    for attempt in range(max_retries):
+        try:
+            # Calcular tiempo de espera exponencial con jitter
+            wait_time = (2 ** attempt) + random.uniform(0, 1)
+            
+            logger.info(
+                "backoff_retry_attempt",
+                attempt=attempt + 1,
+                max_retries=max_retries,
+                wait_seconds=wait_time,
+                query=query,
+            )
+            
+            await asyncio.sleep(wait_time)
+            
+            # Intentar búsqueda nuevamente
+            papers = await tool_instance.adapter.search_papers(
+                query=query,
+                limit=limit,
+                year_from=year_from,
+            )
+            
+            # Éxito - ordenar y retornar
+            papers_sorted = sorted(
+                papers,
+                key=lambda p: p.citation_count,
+                reverse=True,
+            )
+            
+            logger.info(
+                "backoff_retry_success",
+                attempt=attempt + 1,
+                papers_found=len(papers_sorted),
+                query=query,
+            )
+            
+            return [p.to_dict() for p in papers_sorted]
+        
+        except Exception as e:
+            logger.warning(
+                "backoff_retry_failed",
+                attempt=attempt + 1,
+                error=str(e),
+                query=query,
+            )
+            
+            # Si es el último intento, log error y retornar vacío
+            if attempt == max_retries - 1:
+                logger.error(
+                    "backoff_max_retries_exceeded",
+                    query=query,
+                    error=str(e),
+                )
+                return []
+            
+            # Si no, continuar al siguiente intento
+            continue
+    
+    return []

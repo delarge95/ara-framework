@@ -425,7 +425,6 @@ class SemanticScholarAdapter(MCPAdapter[List[Paper]]):
             
             self._last_request_time = asyncio.get_event_loop().time()
     
-    @CircuitBreaker
     async def _make_request(
         self,
         endpoint: str,
