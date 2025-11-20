@@ -1,83 +1,100 @@
-# 🤖 ARA Framework - Autonomous Research Assistant
+# 🤖 ARA Framework - Academic Research Automation
 
-> **Sistema Multi-Agente con MCP y Multi-Modelo para Investigación de Nicho de Mercado**  
-> _Genera análisis completos en minutos usando GPT-5, Claude 4.5, Gemini 2.5 Pro, DeepSeek V3, y MiniMax-M2_
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![LangGraph 1.0+](https://img.shields.io/badge/LangGraph-1.0+-green.svg)](https://github.com/langchain-ai/langgraph)
+[![Groq LLaMA 3.3-70B](https://img.shields.io/badge/LLM-Groq%20LLaMA%203.3--70B-orange.svg)](https://groq.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Last Updated](https://img.shields.io/badge/Updated-Dec_2025-blue.svg)](#)
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![CrewAI](https://img.shields.io/badge/CrewAI-0.70+-green.svg)](https://github.com/joaomdmoura/crewAI)
-[![MCP](https://img.shields.io/badge/MCP-Free_Servers-purple.svg)](https://modelcontextprotocol.io/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Last Updated](https://img.shields.io/badge/Updated-Nov_2025-blue.svg)](#)
+> **Sistema multi-agente inteligente para automatización completa de investigación académica**: desde análisis de nicho hasta generación de documentos técnicos profesionales.
+
+> ⚠️ **MIGRATED TO LANGGRAPH (Nov 2025)**: This framework has been upgraded from CrewAI to LangGraph, the industry-leading production-ready framework used by Uber, LinkedIn, Replit, and Elastic.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Inicio Rápido
 
 ```bash
 # 1. Clonar repositorio
-git clone https://github.com/tu-usuario/ara_framework.git
-cd ara_framework
+git clone https://github.com/delarge95/ara-framework.git
+cd ara-framework
 
-# 2. Instalar dependencias
+# 2. Configurar entorno (Python 3.12+ requerido)
 python -m venv venv
-.\venv\Scripts\activate  # Windows
+source venv/bin/activate  # Linux/Mac
+# o .\venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 
 # 3. Configurar variables de entorno
 cp .env.example .env
-# Editar .env con tus API keys
+# Editar .env con tus API keys (mínimo GROQ_API_KEY)
 
-# 4. Ejecutar setup
+# 4. Ejecutar setup y validación
 python scripts/validate_setup.py
 
-# 5. Generar tu primera tesis
-python -m ara_framework.main --domain "Web 3D Marketing" --company "Absolut Vodka"
+# 5. Ejecutar pipeline de investigación
+python -m ara_framework.cli.main --domain "AI in Healthcare" --focus "market_analysis"
 ```
 
-Resultado: Tesis completa de 80+ páginas en `outputs/thesis_[timestamp]/`
+**Resultado**: Reporte de investigación completo en `output/final_report.md`
 
 ---
 
-## 🎯 ¿Qué Hace ARA?
+## 🎯 Características Principales
 
-**Marco ARA** es un sistema de IA que automatiza **toda la investigación y escritura** de una tesis académica:
+### ✨ Pipeline Completo de Investigación Automatizada
+- **Análisis de Nicho**: Evaluación automática de viabilidad, tendencias y oportunidades
+- **Revisión de Literatura**: Búsqueda y análisis de papers académicos (Semantic Scholar, arXiv)
+- **Arquitectura Técnica**: Diseño de sistemas con mejores prácticas y patrones modernos
+- **Plan de Implementación**: Roadmap detallado con sprints y estimaciones
+- **Documentación Final**: Generación de reportes técnicos profesionales en Markdown
 
-1. 📊 **Analiza el mercado** (competencia, tendencias, brechas)
-2. 📚 **Investiga literatura** académica (Semantic Scholar, ArXiv)
-3. 🏗️ **Diseña arquitectura** técnica (diagramas, stack tecnológico)
-4. 💻 **Genera código** de implementación (si aplica)
-5. 📄 **Escribe el documento** completo (introducción, metodología, conclusiones)
-6. 🎨 **Crea assets** visuales (diagramas, 3D renders con Blender)
+### 🧠 Sistema Multi-Agente con LangGraph
+- **5 Agentes Especializados** trabajando en colaboración secuencial
+- **Graph-based Architecture** con control de flujo explícito
+- **Built-in Checkpointing** para pausar y reanudar ejecución
+- **Razonamiento Avanzado** con LLaMA 3.3-70B (70 billones de parámetros)
+- **Production-Ready** con escalabilidad empresarial probada
 
-### ⚡ Ventajas Clave
+### 💰 Integración LLM Flexible y Económica
+- **Groq (100% GRATIS)**: LLaMA 3.3-70B ultra rápido (750+ tokens/seg)
+- Soporte para **OpenAI GPT-4o**, **Claude Sonnet 3.5**, **Gemini Pro**
+- Configuración vía **LiteLLM** (cambio de modelo en 1 línea)
+- **Budget Manager** para control de costos y límites
 
-| Tradicional         | Con ARA                |
-| ------------------- | ---------------------- |
-| 📅 6-18 meses       | ⚡ 45 minutos          |
-| 💰 $5,000 USD       | 💸 $1.50 USD           |
-| 😰 40% abandono     | ✅ 100% completitud    |
-| 🔧 10+ herramientas | 🎯 1 sistema integrado |
+### 🔧 Herramientas Avanzadas
+- **Web Scraping** (Playwright MCP) con JavaScript rendering
+- **Búsqueda Académica** (Semantic Scholar API) con filtros avanzados
+- **Procesamiento de PDFs** (MarkItDown MCP) con extracción de secciones
+- **Base de Datos** (Redis + Supabase opcional) para persistencia
 
 ---
 
-## 🏗️ Arquitectura del Sistema
-
-### Vista de 3 Capas
+## 🏗️ Arquitectura
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  CAPA 1: FRONTEND (Next.js 14 + shadcn/ui)             │
-│  • Web Dashboard                                        │
-│  • Thesis Builder (wizard)                              │
-│  • Progress Tracker (WebSocket)                         │
-│  • Document Editor (Notion-style)                       │
-└────────────────────┬────────────────────────────────────┘
-                     │ REST API + WebSocket
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  CAPA 2: ORCHESTRATION (CrewAI Multi-Agent)            │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐  │
+┌─────────────────────────────────────────────────────────────────┐
+│                    ARA FRAMEWORK PIPELINE                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐     │
+│  │   Agent 1    │───▶│   Agent 2    │───▶│   Agent 3    │     │
+│  │Niche Analyst │    │ Literature   │    │ Technical    │     │
+│  │              │    │ Researcher   │    │ Architect    │     │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘     │
+│         │                    │                    │              │
+│         ▼                    ▼                    ▼              │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │         Memory & Context Management                   │      │
+│  └──────────────────────────────────────────────────────┘      │
+│         │                    │                    │              │
+│         ▼                    ▼                    ▼              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐     │
+│  │   Agent 4    │    │   Agent 5    │    │    Final     │     │
+│  │Implementation│    │   Content    │    │   Report     │     │
+│  │ Specialist   │    │ Synthesizer  │    │  Generator   │     │
+│  └──────────────┘    └──────────────┘    └──────────────┘     │
+└─────────────────────────────────────────────────────────────────┘
 │  │  ProjectManager (Orquestador)                    │  │
 │  │  • Delega tareas a agentes                       │  │
 │  │  • Gestiona budget de modelos                    │  │
@@ -232,6 +249,69 @@ features:
 | **Rube MCP**           | Rube      | [Pendiente definir uso]              |
 
 > 💡 **No necesitas instalarlos**: Si ya tienes estos servers en VS Code, ARA se conecta automáticamente via el protocolo MCP.
+
+---
+
+## 🏠 Ollama - Desarrollo Local Sin Límites
+
+**NUEVO**: ARA ahora soporta **Ollama** para desarrollo local ilimitado.
+
+### ¿Por Qué Ollama?
+
+Durante el desarrollo, GitHub Models tiene un límite de **50 requests/día**. Con Ollama:
+
+- ✅ **Requests ilimitados** (inferencia local)
+- ✅ **$0 costo** (sin API keys)
+- ✅ **Tool calling funcional** (verificado con 4/4 tests)
+- ⚠️ **Calidad ligeramente inferior** a gpt-4o (aceptable para desarrollo)
+
+### Modelo Usado: Mistral 7B v0.3
+
+```yaml
+modelo: mistral:7b
+parametros: 7B
+context_window: 32K tokens
+tool_calling: ✅ Confirmado (documentación oficial Ollama)
+tamaño: 4.4GB
+velocidad: ~2x más lento que gpt-4o (6-8 min vs 3-5 min)
+```
+
+### Uso Rápido
+
+```bash
+# 1. Asegurarse que Ollama está corriendo
+ollama serve
+
+# 2. Usar Ollama en vez de GitHub Models
+$env:USE_OLLAMA="true"
+python main.py
+
+# 3. Volver a GitHub Models
+$env:USE_OLLAMA="false"
+python main.py
+```
+
+### Estrategia Recomendada: Híbrida
+
+```bash
+# Desarrollo e iteración (sin límites)
+USE_OLLAMA=true python main.py  # Ejecutar N veces
+
+# Validación final (máxima calidad)
+USE_OLLAMA=false python main.py  # Antes de entregar
+```
+
+### Tests Disponibles
+
+```bash
+# Test rápido (~3-5 min)
+python test_ollama_quick.py
+
+# Comparación completa GitHub vs Ollama (~15 min)
+python test_ollama_vs_github.py
+```
+
+**Documentación completa**: Ver `OLLAMA_QUICKSTART.md` y `GUIA_OLLAMA.md`
 
 ---
 
@@ -568,10 +648,40 @@ MIT License - Ver [LICENSE](LICENSE) para detalles.
 
 ---
 
+## 🤖 Agentes del Sistema
+
+### 🔍 **Agent 1: Niche Analyst**
+- **Rol**: Análisis de mercado y viabilidad
+- **Tareas**: Evaluación de competencia, identificación de brechas, análisis SWOT
+- **Herramientas**: Web scraping, búsquedas especializadas
+
+### 📚 **Agent 2: Literature Researcher**  
+- **Rol**: Investigación académica y científica
+- **Tareas**: Búsqueda de papers, análisis de estado del arte, síntesis bibliográfica
+- **Herramientas**: Semantic Scholar API, ArXiv, filtros avanzados
+
+### 🏗️ **Agent 3: Technical Architect**
+- **Rol**: Diseño de soluciones técnicas
+- **Tareas**: Arquitectura de sistemas, selección de tecnologías, diagramas
+- **Herramientas**: Análisis de frameworks, patrones de diseño
+
+### 💻 **Agent 4: Implementation Specialist**
+- **Rol**: Especialista en implementación
+- **Tareas**: Roadmaps de desarrollo, estimaciones, sprints
+- **Herramientas**: Planificación ágil, análisis de dependencias
+
+### ✍️ **Agent 5: Content Synthesizer**
+- **Rol**: Generador de informes finales
+- **Tareas**: Síntesis de información, redacción técnica, estructura de documentos
+- **Herramientas**: Plantillas profesionales, formateo automático
+
+---
+
 ## 🙏 Agradecimientos
 
-- **CrewAI** por el framework de multi-agentes
-- **Anthropic** (Claude 3.5) y **OpenAI** (GPT-4) por los LLMs
+- **LangChain/LangGraph** por el framework de graphs de IA
+- **Groq** por el acceso gratuito a LLaMA 3.3-70B
+- **Anthropic** (Claude 3.5) y **OpenAI** (GPT-4o) por los LLMs
 - **Microsoft** por Playwright MCP y MarkItDown MCP
 - **Spec Kit** por la metodología de documentación
 - **Comunidad MCP** por el ecosistema de servers
